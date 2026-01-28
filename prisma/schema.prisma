@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id       String   @id @default(cuid())
+  username String   @unique
+  password String   // bcrypt hash
+  name     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("admins")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  password  String?    // bcrypt hash - null until user sets it
+  activated Boolean    @default(false)
+  activatedAt DateTime?
+  activationCodeUsed String? // code that was used to activate
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  lessonPlans LessonPlan[]
+  
+  @@map("users")
+}
+
+model ActivationCode {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  active    Boolean    @default(true)
+  expiresAt DateTime?
+  maxUses   Int        @default(1)
+  usesCount Int        @default(0)
+  createdAt DateTime   @default(now())
+  createdBy String     // admin username
+  
+  @@map("activation_codes")
+}
+
+model CurriculumResource {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  grade       String?    // e.g., "3rd", "6-8"
+  unit        String?
+  subject     String?
+  tags        String?    // comma-separated tags
+  type        String     // 'pdf', 'doc', 'link'
+  fileUrl     String?
+  externalUrl String?
+  uploadedAt  DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  createdBy   String     // admin username
+  
+  lessonPlanResources LessonPlanResource[]
+  
+  @@map("curriculum_resources")
+}
+
+model LessonPlanResource {
+  id               String   @id @default(cuid())
+  lessonPlanId     String
+  lessonPlan       LessonPlan @relation(fields: [lessonPlanId], references: [id], onDelete: Cascade)
+  resourceId       String
+  resource         CurriculumResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  
+  @@unique([lessonPlanId, resourceId])
+  @@map("lesson_plan_resources")
+}
+
+model LessonPlan {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacher   String?
+  campus    String?
+  gradeLevel String?
+  date      String?
+  safetyAndManagement String?
+  instantActivityWarmUp String?
+  skillIntroduction String?
+  skillPractice String?
+  applicationActivity String?
+  coolDownClosure String?
+  assessment String?
+  mvpa      String?
+  adaptations String?
+  teacherReflections String?
+  isDraft   Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  resources LessonPlanResource[]
+  
+  @@map("lesson_plans")
+}
+
+model AdminLog {
+  id        String     @id @default(cuid())
+  action    String     // 'activate_code', 'upload_document', 'delete_user', etc.
+  adminEmail String
+  details   String     // JSON
+  createdAt DateTime   @default(now())
+  
+  @@map("admin_logs")
+}
