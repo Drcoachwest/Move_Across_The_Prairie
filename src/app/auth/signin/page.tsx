@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -110,10 +111,20 @@ export default function SignIn() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-md p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sign In</h1>
-          <p className="text-gray-600 mb-6">
-            Welcome to Move Across the Prairie
-          </p>
+          <div className="flex flex-col items-center text-center mb-6">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={96}
+              height={96}
+              className="h-24 w-auto"
+              priority
+            />
+            <h1 className="text-3xl font-bold text-gray-900 mt-4">
+              Move Across the Prairie
+            </h1>
+            <p className="text-gray-600 mt-1">Sign In</p>
+          </div>
 
           {error && (
             <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">

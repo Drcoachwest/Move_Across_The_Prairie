@@ -37,6 +37,21 @@ model User {
   @@map("users")
 }
 
+model Teacher {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String
+  school    String     // School they teach at
+  password  String     // bcrypt hash
+  activated Boolean    @default(false)
+  activatedAt DateTime?
+  activationCodeUsed String? // code that was used to activate
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  @@map("teachers")
+}
+
 model ActivationCode {
   id        String     @id @default(cuid())
   code      String     @unique
@@ -117,4 +132,78 @@ model AdminLog {
   createdAt DateTime   @default(now())
   
   @@map("admin_logs")
+}
+
+model Student {
+  id                String     @id @default(cuid())
+  districtId        String     @unique // unique identifier across schools
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  currentGrade      Int        // 3-12
+  currentSchool     String
+  peTeacher         String
+  classroomTeacher  String?    // classroom teacher (e.g., Mrs. Smith)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  fitnesGramTests   FitnesGramTest[]
+  studentHistory    StudentHistory[]
+  
+  @@index([districtId])
+  @@index([currentSchool])
+  @@index([classroomTeacher])
+  @@map("students")
+}
+
+model FitnesGramTest {
+  id                String     @id @default(cuid())
+  studentId         String
+  student           Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school            String
+  testDate          DateTime
+  testSeason        String     // 'Fall' or 'Spring'
+  testYear          Int        // 2024, 2025, etc.
+  
+  // Test Metrics
+  pacerOrMileRun    Float?     // PACER laps or mile time in minutes
+  pushups           Int?
+  situps            Int?
+  sitAndReach       Float?     // flexibility test, distance in cm
+  shoulderStretchRight Boolean? // pass/fail
+  shoulderStretchLeft Boolean?  // pass/fail
+  height            Float?     // in cm
+  weight            Float?     // in kg
+  bmi               Float?     // calculated from height/weight
+  trunkLift         Float?     // distance in cm
+  
+  // Scoring
+  healthZone        String?    // Healthy Fitness Zone or Needs Improvement
+  percentile        Int?       // 1-99
+  notes             String?
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  @@unique([studentId, testYear, testSeason])
+  @@index([studentId])
+  @@index([testYear, testSeason])
+  @@map("fitnesgram_tests")
+}
+
+model StudentHistory {
+  id                String     @id @default(cuid())
+  studentId         String
+  student           Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school            String
+  enrollmentDate    DateTime
+  exitDate          DateTime?
+  grade             Int
+  peTeacher         String
+  
+  createdAt         DateTime   @default(now())
+  
+  @@index([studentId])
+  @@index([school])
+  @@map("student_history")
 }

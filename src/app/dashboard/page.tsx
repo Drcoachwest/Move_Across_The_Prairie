@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -10,11 +11,21 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Move Across the Prairie
-          </h1>
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={120}
+              height={120}
+              className="h-[88px] sm:h-[120px] w-auto"
+              priority
+            />
+            <h1 className="text-3xl font-bold text-gray-900">
+              Move Across the Prairie
+            </h1>
+          </div>
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
             <span className="text-sm text-gray-600">{userEmail}</span>
             <button
               onClick={async () => {
@@ -64,6 +75,22 @@ export default function Dashboard() {
               </p>
               <span className="text-blue-600 font-semibold">
                 Create Lesson Plan →
+              </span>
+            </div>
+          </Link>
+
+          {/* Assessment Data Card */}
+          <Link href="/dashboard/assessment">
+            <div className="card cursor-pointer hover:shadow-lg transition">
+              <div className="text-4xl mb-4">📊</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Assessment Data
+              </h3>
+              <p className="text-gray-600 mb-4">
+                View student FitnessGram test results, track progress, and compare fall vs. spring data.
+              </p>
+              <span className="text-blue-600 font-semibold">
+                View Assessment →
               </span>
             </div>
           </Link>

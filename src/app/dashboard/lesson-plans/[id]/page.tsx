@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -125,7 +126,15 @@ export default function ViewLessonPlan() {
     return (
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow">
-          <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={64}
+              height={64}
+              className="h-12 sm:h-16 w-auto"
+              priority
+            />
             <Link href="/dashboard/lesson-plans" className="text-2xl font-bold text-gray-900">
               ← Back to Lesson Plans
             </Link>
@@ -147,7 +156,15 @@ export default function ViewLessonPlan() {
     return (
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow">
-          <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={64}
+              height={64}
+              className="h-12 sm:h-16 w-auto"
+              priority
+            />
             <Link href="/dashboard/lesson-plans" className="text-2xl font-bold text-gray-900">
               ← Back to Lesson Plans
             </Link>
@@ -164,13 +181,23 @@ export default function ViewLessonPlan() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-4xl mx-auto px-4 py-6 flex justify-between items-center">
+        <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <Link href="/dashboard/lesson-plans" className="text-2xl font-bold text-gray-900">
             ← Back
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {lessonPlan?.title || "Lesson Plan"}
-          </h1>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={64}
+              height={64}
+              className="h-12 sm:h-16 w-auto"
+              priority
+            />
+            <h1 className="text-2xl font-bold text-gray-900">
+              {lessonPlan?.title || "Lesson Plan"}
+            </h1>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleExportPDF}

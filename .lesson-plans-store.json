@@ -63,28 +63,5 @@
     "createdAt": "2026-01-28T21:25:43.793Z",
     "updatedAt": "2026-01-28T21:25:43.793Z",
     "resources": []
-  },
-  {
-    "id": "fa9cea0e-1cdb-44dc-8d19-a15ec5083c39",
-    "title": "test",
-    "teacher": "West",
-    "campus": "south",
-    "gradeLevel": "4",
-    "date": "2026-01-28",
-    "safetyAndManagement": "sdfads",
-    "instantActivityWarmUp": "asdf",
-    "skillIntroduction": "",
-    "skillPractice": "",
-    "applicationActivity": "asdf",
-    "coolDownClosure": "",
-    "assessment": "",
-    "mvpa": "",
-    "adaptations": "",
-    "teacherReflections": "",
-    "isDraft": false,
-    "createdAt": "2026-01-28T21:26:18.803Z",
-    "updatedAt": "2026-01-28T21:28:29.722Z",
-    "resources": [],
-    "selectedResources": []
   }
 ]

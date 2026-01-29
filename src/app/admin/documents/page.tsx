@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Resource {
   id: string;
@@ -12,10 +13,14 @@ interface Resource {
   subject: string;
   type: string;
   tags: string[];
+  fileUrl?: string;
+  externalUrl?: string;
+  uploadedAt: string;
 }
 
 export default function Resources() {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [grade, setGrade] = useState("");
@@ -24,8 +29,28 @@ export default function Resources() {
   const [type, setType] = useState("pdf");
   const [tags, setTags] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    fetchResources();
+  }, []);
+
+  const fetchResources = async () => {
+    try {
+      const response = await fetch("/api/curriculum");
+      const data = await response.json();
+      if (data.resources) {
+        setResources(data.resources.map((r: any) => ({
+          ...r,
+          tags: r.tags ? r.tags.split(",") : [],
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching resources:", error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,16 +66,31 @@ export default function Resources() {
       formData.append("subject", subject);
       formData.append("type", type);
       formData.append("tags", tags);
-      formData.append("externalUrl", externalUrl);
+      
+      if (type === "link") {
+        formData.append("externalUrl", externalUrl);
+      } else if (file) {
+        formData.append("file", file);
+      } else if (!editingId) {
+        setMessage("Please select a file to upload");
+        setLoading(false);
+        return;
+      }
 
-      const response = await fetch("/api/admin/resources", {
-        method: "POST",
+      const url = editingId ? `/api/curriculum?id=${editingId}` : "/api/curriculum";
+      const method = editingId ? "PUT" : "POST";
+      
+      const response = await fetch(url, {
+        method,
         body: formData,
       });
 
       const data = await response.json();
       if (data.success) {
-        setResources([...resources, data.resource]);
+        setMessage(editingId ? "Resource updated successfully!" : "Resource added successfully!");
+        fetchResources(); // Refresh the list
+        // Reset form
+        setEditingId(null);
         setTitle("");
         setDescription("");
         setGrade("");
@@ -59,9 +99,9 @@ export default function Resources() {
         setType("pdf");
         setTags("");
         setExternalUrl("");
-        setMessage("Resource added successfully!");
+        setFile(null);
       } else {
-        setMessage(data.message || "Failed to add resource");
+        setMessage(data.error || `Failed to ${editingId ? 'update' : 'add'} resource`);
       }
     } catch (error) {
       setMessage("An error occurred");
@@ -70,15 +110,76 @@ export default function Resources() {
     }
   };
 
+  const handleEdit = (resource: Resource) => {
+    setEditingId(resource.id);
+    setTitle(resource.title);
+    setDescription(resource.description || "");
+    setGrade(resource.grade || "");
+    setUnit(resource.unit || "");
+    setSubject(resource.subject || "");
+    setType(resource.type);
+    setTags(resource.tags.join(", "));
+    setExternalUrl(resource.externalUrl || "");
+    setFile(null);
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setTitle("");
+    setDescription("");
+    setGrade("");
+    setUnit("");
+    setSubject("");
+    setType("pdf");
+    setTags("");
+    setExternalUrl("");
+    setFile(null);
+    setMessage("");
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this resource?")) return;
+
+    try {
+      const response = await fetch(`/api/curriculum?id=${id}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        setMessage("Resource deleted successfully!");
+        fetchResources();
+        if (editingId === id) {
+          handleCancelEdit();
+        }
+      } else {
+        setMessage("Failed to delete resource");
+      }
+    } catch (error) {
+      setMessage("An error occurred");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <Link href="/admin/dashboard" className="text-2xl font-bold">
             ← Admin Dashboard
           </Link>
-          <h1 className="text-2xl font-bold">Curriculum Resources</h1>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={72}
+              height={72}
+              className="h-12 sm:h-[72px] w-auto"
+              priority
+            />
+            <h1 className="text-2xl font-bold">Curriculum Resources</h1>
+          </div>
           <button
             onClick={async () => {
               await fetch("/api/auth/admin-signout", { method: "POST" });
@@ -96,9 +197,20 @@ export default function Resources() {
           {/* Upload Form */}
           <div className="lg:col-span-1">
             <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Add Resource
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingId ? "Edit Resource" : "Add Resource"}
+                </h3>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="text-sm text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -139,32 +251,6 @@ export default function Resources() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Unit
-                  </label>
-                  <input
-                    type="text"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    placeholder="Unit name"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="Math, Science, ELA"
-                    className="input-field"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Type *
                   </label>
                   <select value={type} onChange={(e) => setType(e.target.value)} className="input-field">
@@ -187,7 +273,7 @@ export default function Resources() {
                   />
                 </div>
 
-                {type === "link" && (
+                {type === "link" ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       URL *
@@ -201,10 +287,28 @@ export default function Resources() {
                       required={type === "link"}
                     />
                   </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Upload File {editingId ? "(leave empty to keep current file)" : "*"}
+                    </label>
+                    <input
+                      type="file"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      accept={type === "pdf" ? ".pdf" : ".doc,.docx"}
+                      className="input-field"
+                      required={type !== "link" && !editingId}
+                    />
+                    {file && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Selected: {file.name}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-50">
-                  {loading ? "Adding..." : "Add Resource"}
+                  {loading ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Update Resource" : "Add Resource")}
                 </button>
 
                 {message && (
@@ -247,11 +351,10 @@ export default function Resources() {
                           )}
                           <div className="flex gap-2 mt-2 text-xs text-gray-500">
                             {resource.grade && <span>Grade: {resource.grade}</span>}
-                            {resource.subject && <span>Subject: {resource.subject}</span>}
-                            <span>{resource.type.toUpperCase()}</span>
+                            <span className="font-semibold">{resource.type.toUpperCase()}</span>
                           </div>
                           {resource.tags.length > 0 && (
-                            <div className="flex gap-1 mt-2">
+                            <div className="flex gap-1 mt-2 flex-wrap">
                               {resource.tags.map((tag) => (
                                 <span
                                   key={tag}
@@ -262,6 +365,40 @@ export default function Resources() {
                               ))}
                             </div>
                           )}
+                          {resource.fileUrl && (
+                            <a
+                              href={resource.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                            >
+                              📄 View File
+                            </a>
+                          )}
+                          {resource.externalUrl && (
+                            <a
+                              href={resource.externalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                            >
+                              🔗 Open Link
+                            </a>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 ml-4">
+                          <button
+                            onClick={() => handleEdit(resource)}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(resource.id)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     </div>

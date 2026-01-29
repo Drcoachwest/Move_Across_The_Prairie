@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
@@ -15,6 +16,7 @@ interface LessonPlan {
 
 export default function LessonPlans() {
   const [lessonPlans, setLessonPlans] = useState<LessonPlan[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLessonPlans();
@@ -32,17 +34,54 @@ export default function LessonPlans() {
     }
   };
 
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/lessons?id=${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove the deleted lesson plan from the state
+        setLessonPlans(lessonPlans.filter(plan => plan.id !== id));
+      } else {
+        alert(data.message || "Failed to delete lesson plan");
+      }
+    } catch (error) {
+      console.error("Error deleting lesson plan:", error);
+      alert("An error occurred while deleting the lesson plan");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
             ← Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Lesson Plans
-          </h1>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={72}
+              height={72}
+              className="h-12 sm:h-[72px] w-auto"
+              priority
+            />
+            <h1 className="text-2xl font-bold text-gray-900">
+              Lesson Plans
+            </h1>
+          </div>
         </div>
       </header>
 
@@ -73,9 +112,19 @@ export default function LessonPlans() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {lessonPlans.map((plan) => (
               <div key={plan.id} className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {plan.title}
-                </h3>
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 flex-1">
+                    {plan.title}
+                  </h3>
+                  <button
+                    onClick={() => handleDelete(plan.id, plan.title)}
+                    disabled={deletingId === plan.id}
+                    className="text-red-600 hover:text-red-800 text-sm ml-2 disabled:opacity-50"
+                    title="Delete lesson plan"
+                  >
+                    {deletingId === plan.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
                 <p className="text-gray-600 text-sm mb-4">
                   {plan.teacher} • {plan.campus} • Grade {plan.gradeLevel}
                 </p>

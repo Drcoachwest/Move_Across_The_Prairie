@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getLessonPlans, addLessonPlan } from "@/lib/lesson-store";
+import { getLessonPlans, addLessonPlan, deleteLessonPlan } from "@/lib/lesson-store";
 
 export async function GET() {
   try {
@@ -109,6 +109,40 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error creating lesson plan:", error);
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Lesson plan ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const success = deleteLessonPlan(id);
+
+    if (success) {
+      return NextResponse.json({
+        success: true,
+        message: "Lesson plan deleted successfully",
+      });
+    } else {
+      return NextResponse.json(
+        { success: false, message: "Lesson plan not found" },
+        { status: 404 }
+      );
+    }
+  } catch (error) {
+    console.error("Error deleting lesson plan:", error);
     return NextResponse.json(
       { success: false, message: "Server error" },
       { status: 500 }

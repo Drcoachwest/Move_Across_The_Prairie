@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 export default function AdminDashboard() {
@@ -7,8 +8,18 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={80}
+              height={80}
+              className="h-12 sm:h-20 w-auto"
+              priority
+            />
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          </div>
           <button
             onClick={async () => {
               const response = await fetch("/api/auth/admin-signout", { method: "POST" });
@@ -88,6 +99,22 @@ export default function AdminDashboard() {
               </p>
               <span className="text-blue-600 font-semibold">
                 View Logs →
+              </span>
+            </div>
+          </Link>
+
+          {/* FitnessGram Assessment Card */}
+          <Link href="/admin/assessment">
+            <div className="card cursor-pointer hover:shadow-lg transition">
+              <div className="text-4xl mb-4">💪</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                FitnessGram Assessment
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Import student data, enter fitness test results, and track progress.
+              </p>
+              <span className="text-blue-600 font-semibold">
+                Manage Assessment →
               </span>
             </div>
           </Link>

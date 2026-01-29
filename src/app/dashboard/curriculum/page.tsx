@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 
@@ -12,6 +13,9 @@ interface Resource {
   subject: string;
   type: string;
   tags: string[];
+  fileUrl?: string;
+  externalUrl?: string;
+  uploadedAt: string;
 }
 
 export default function CurriculumLibrary() {
@@ -55,10 +59,13 @@ export default function CurriculumLibrary() {
 
   const fetchResources = async () => {
     try {
-      const response = await fetch("/api/admin/resources");
+      const response = await fetch("/api/curriculum");
       const data = await response.json();
-      if (data.success) {
-        setResources(data.resources);
+      if (data.resources) {
+        setResources(data.resources.map((r: any) => ({
+          ...r,
+          tags: r.tags ? r.tags.split(",") : [],
+        })));
       }
     } catch (error) {
       console.error("Error fetching resources:", error);
@@ -75,14 +82,24 @@ export default function CurriculumLibrary() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
             ← Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Curriculum Library
-          </h1>
-          <div className="w-20"></div>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie logo"
+              width={72}
+              height={72}
+              className="h-12 sm:h-[72px] w-auto"
+              priority
+            />
+            <h1 className="text-2xl font-bold text-gray-900">
+              Curriculum Library
+            </h1>
+          </div>
+          <div className="w-0 sm:w-20"></div>
         </div>
       </header>
 
@@ -207,9 +224,26 @@ export default function CurriculumLibrary() {
                   </div>
                 )}
 
-                <button className="btn-primary w-full">
-                  {resource.type === "link" ? "Open Link" : "Download"}
-                </button>
+                {resource.type === "link" ? (
+                  <a
+                    href={resource.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary w-full text-center block"
+                  >
+                    🔗 Open Link
+                  </a>
+                ) : (
+                  <a
+                    href={resource.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="btn-primary w-full text-center block"
+                  >
+                    📥 Download {resource.type.toUpperCase()}
+                  </a>
+                )}
               </div>
             ))}
           </div>
