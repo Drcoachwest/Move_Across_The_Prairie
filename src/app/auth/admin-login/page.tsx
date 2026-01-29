@@ -17,7 +17,7 @@ export default function AdminLogin() {
     setError("");
 
     try {
-      console.log("Submitting login form with:", { username, password });
+      // console.log("Submitting login form with:", { username, password });
       
       const response = await fetch("/api/auth/admin-login", {
         method: "POST",
@@ -26,13 +26,13 @@ export default function AdminLogin() {
         credentials: "include",
       });
 
-      console.log("Response status:", response.status);
+      // console.log("Response status:", response.status);
       
       const data = await response.json();
-      console.log("Response data:", data);
+      // console.log("Response data:", data);
 
       if (data.success) {
-        console.log("Login successful, redirecting to admin dashboard...");
+        // console.log("Login successful, redirecting to admin dashboard...");
         // Don't call setLoading(false) before redirect - just redirect
         window.location.href = "/admin/dashboard";
         return;

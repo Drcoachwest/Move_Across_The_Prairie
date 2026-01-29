@@ -1,3 +1,6 @@
+// DEPRECATED: This API endpoint is no longer used. Teachers now sign in via /api/auth/teacher-signin
+// This can be deleted once confirmed it's not referenced anywhere
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { comparePassword, hashPassword } from "@/lib/password";

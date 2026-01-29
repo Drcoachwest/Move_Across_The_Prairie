@@ -7,11 +7,11 @@ export async function GET(
 ) {
   try {
     const { id } = params;
-    console.log("Fetching lesson plan with ID:", id);
+    // console.log("Fetching lesson plan with ID:", id);
     
     // Search for lesson plan in store
     const lessonPlan = getLessonPlanById(id);
-    console.log("Found lesson plan:", lessonPlan ? "yes" : "no");
+    // console.log("Found lesson plan:", lessonPlan ? "yes" : "no");
 
     if (!lessonPlan) {
       return NextResponse.json(

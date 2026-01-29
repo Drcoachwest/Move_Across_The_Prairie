@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
     // TODO: Query database with filters
     const filters = { grade, subject, unit, search };
-    console.log("Fetching resources with filters:", filters);
+    // console.log("Fetching resources with filters:", filters);
 
     return NextResponse.json({
       success: true,
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
 
     // TODO: Save file if uploaded
     // TODO: Save resource to database
+    // NOTE: Resource creation is stubbed - implement database storage before using in production
 
     const newResource = {
       id: crypto.randomUUID(),

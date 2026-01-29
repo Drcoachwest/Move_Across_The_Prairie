@@ -39,10 +39,10 @@ export default function ViewLessonPlan() {
 
   const fetchLessonPlan = async () => {
     try {
-      console.log("Fetching lesson plan with ID:", lessonPlanId);
+      // console.log("Fetching lesson plan with ID:", lessonPlanId);
       const response = await fetch(`/api/lessons/${lessonPlanId}`);
       const data = await response.json();
-      console.log("API Response:", data);
+      // console.log("API Response:", data);
       if (data.success && data.lessonPlan) {
         setLessonPlan(data.lessonPlan);
       } else {

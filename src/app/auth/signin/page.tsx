@@ -1,5 +1,8 @@
 "use client";
 
+// DEPRECATED: This page is no longer used. Teachers now sign in via /auth/teacher-signin
+// This can be deleted once confirmed it's not referenced anywhere
+
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
