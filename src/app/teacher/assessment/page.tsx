@@ -386,11 +386,14 @@ export default function TeacherAssessmentPage() {
                       <option value="">Select a student...</option>
                       {students
                         .filter(s => !selectedClassroomTeacher || s.classroomTeacher === selectedClassroomTeacher)
-                        .map(student => (
-                          <option key={student.id} value={student.id}>
-                            {student.firstName} {student.lastName} (Grade {student.currentGrade})
-                          </option>
-                        ))}
+                        .map(student => {
+                          const hasCompletedTest = tests.some(t => t.studentId === student.id);
+                          return (
+                            <option key={student.id} value={student.id}>
+                              {hasCompletedTest ? '✓ ' : ''}{student.firstName} {student.lastName} (Grade {student.currentGrade})
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
 
