@@ -16,14 +16,16 @@ export default function ActivityLogs() {
             ← Admin Dashboard
           </Link>
           <div className="flex items-center gap-3">
-            <Image
-              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
-              alt="Move Across the Prairie logo"
-              width={72}
-              height={72}
-              className="h-12 sm:h-[72px] w-auto"
-              priority
-            />
+            <Link href="/admin/dashboard" className="hover:opacity-80 transition">
+              <Image
+                src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+                alt="Move Across the Prairie logo"
+                width={72}
+                height={72}
+                className="h-12 sm:h-[72px] w-auto"
+                priority
+              />
+            </Link>
             <h1 className="text-2xl font-bold">Activity Log</h1>
           </div>
           <button

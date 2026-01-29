@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface Student {
   id: string;
@@ -239,8 +240,14 @@ export default function AssessmentPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between mb-4">
-            <Link href="/admin/dashboard" className="flex items-center gap-2">
-              <div className="bg-blue-600 text-white rounded px-3 py-2 font-bold">MATP</div>
+            <Link href="/admin/dashboard" className="flex items-center hover:opacity-80 transition">
+              <Image
+                src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+                alt="Move Across the Prairie"
+                width={60}
+                height={60}
+                className="h-[60px] w-auto"
+              />
             </Link>
             <Link 
               href="/admin/dashboard"

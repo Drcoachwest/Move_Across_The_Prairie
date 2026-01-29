@@ -10,14 +10,16 @@ export default function AdminDashboard() {
       <header className="bg-gray-900 text-white">
         <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
           <div className="flex items-center gap-3">
-            <Image
-              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
-              alt="Move Across the Prairie logo"
-              width={80}
-              height={80}
-              className="h-12 sm:h-20 w-auto"
-              priority
-            />
+            <Link href="/admin/dashboard" className="hover:opacity-80 transition">
+              <Image
+                src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+                alt="Move Across the Prairie logo"
+                width={80}
+                height={80}
+                className="h-12 sm:h-20 w-auto"
+                priority
+              />
+            </Link>
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
           </div>
           <button
