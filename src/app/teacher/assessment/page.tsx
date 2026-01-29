@@ -57,7 +57,6 @@ interface TestData {
     currentGrade: number;
     currentSchool: string;
     peTeacher: string;
-    classroomTeacher?: string;
   };
 }
 
@@ -78,13 +77,9 @@ export default function TeacherAssessmentPage() {
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'enter' | 'view' | 'class-summary'>('enter');
   const [selectedClassroomTeacher, setSelectedClassroomTeacher] = useState<string>('');
-  const [viewTestsTeacher, setViewTestsTeacher] = useState<string>('');
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [classSummaryTeacher, setClassSummaryTeacher] = useState<string>('');
-  const [showFilters, setShowFilters] = useState(true);
-  const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
-  const [filterSeason, setFilterSeason] = useState<'Fall' | 'Spring'>('Fall');
-  const [filterSchool, setFilterSchool] = useState<string>('');
-  const [filterClassroomTeacher, setFilterClassroomTeacher] = useState<string>('');
+  const [viewTestsTeacher, setViewTestsTeacher] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
@@ -92,7 +87,7 @@ export default function TeacherAssessmentPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // Get teacher info from session
+  // Check teacher session
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -104,13 +99,9 @@ export default function TeacherAssessmentPage() {
         const data = await response.json();
         if (data.teacher) {
           setTeacherInfo(data.teacher);
-          loadStudents();
-          loadTests();
         }
       } catch (err) {
         router.push('/auth/teacher-signin');
-      } finally {
-        setLoading(false);
       }
     };
     checkSession();
@@ -122,7 +113,11 @@ export default function TeacherAssessmentPage() {
       const response = await fetch('/api/admin/students');
       if (!response.ok) throw new Error('Failed to load students');
       const data = await response.json();
-      setStudents(data.students || []);
+      // Filter students by teacher's school
+      const filteredStudents = teacherInfo 
+        ? data.students.filter((s: Student) => s.currentSchool === teacherInfo.school)
+        : data.students;
+      setStudents(filteredStudents || []);
       setError('');
     } catch (err) {
       setError('Failed to load students');
@@ -142,17 +137,28 @@ export default function TeacherAssessmentPage() {
     }
   };
 
+  // Load students and tests on mount and when entering test data tab
+  useEffect(() => {
+    if (teacherInfo) {
+      loadStudents();
+      loadTests();
+    }
+  }, [activeTab, teacherInfo]);
+
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
-    setFormData(prev => {
-      const updated = {
-        ...prev,
-        [name]: type === 'checkbox' ? checked : (name.includes('?') || name === 'studentId' ? value : value === '' ? undefined : isNaN(Number(value)) ? value : Number(value)),
-      };
-      return updated;
-    });
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? (value ? parseFloat(value) : undefined) : value),
+    }));
+  };
+
+  const calculateBMI = (height?: number, weight?: number) => {
+    if (!height || !weight) return undefined;
+    // BMI = (weight in pounds / (height in inches)^2) * 703
+    return (weight / (height * height)) * 703;
   };
 
   const handleSubmitTest = async (e: React.FormEvent) => {
@@ -162,21 +168,22 @@ export default function TeacherAssessmentPage() {
       return;
     }
 
-    setSubmitting(true);
-    setError('');
-    setSuccess('');
-
     try {
+      setError('');
+      setSuccess('');
+      setSubmitting(true);
+
       const testYear = new Date(formData.testDate).getFullYear();
-      const submitData = {
+      const payload = {
         ...formData,
         testYear,
+        bmi: calculateBMI(formData.height, formData.weight),
       };
-      
+
       const response = await fetch('/api/admin/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(submitData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -185,16 +192,20 @@ export default function TeacherAssessmentPage() {
       }
 
       setSuccess('Test data saved successfully!');
-      // Reset form but keep classroom teacher selected
-      setFormData({ 
-        studentId: '', 
-        testDate: new Date().toISOString().split('T')[0], 
-        testSeason: 'Fall' 
+      
+      // Keep the classroom teacher selected but reset other fields
+      setFormData({
+        studentId: '',
+        testDate: new Date().toISOString().split('T')[0],
+        testSeason: formData.testSeason,
       });
-      // Don't clear selectedClassroomTeacher - keep it selected
-      loadTests();
-      // Keep success message visible longer so user can see it
+      setEditingTestId(null);
+      
+      // Show success message for 5 seconds
       setTimeout(() => setSuccess(''), 5000);
+      
+      // Reload tests list
+      await loadTests();
     } catch (err: any) {
       setError(err.message || 'Failed to save test');
     } finally {
@@ -205,26 +216,20 @@ export default function TeacherAssessmentPage() {
   const handleSignOut = async () => {
     try {
       await fetch('/api/auth/signout', { method: 'POST' });
+      router.push('/auth/teacher-signin');
     } catch (err) {
       console.error('Signout error:', err);
     }
-    router.push('/auth/teacher-signin');
   };
 
-  const classroomTeachers = Array.from(
-    new Set(
-      students
-        .filter((s) => s.classroomTeacher)
-        .map((s) => s.classroomTeacher)
-    )
-  ).sort();
-
-  const calculateBMI = (height: number | undefined, weight: number | undefined) => {
-    if (!height || !weight) return undefined;
-    return Math.round(((weight / (height * height)) * 703) * 10) / 10;
+  const navigateTab = (tab: 'enter' | 'view' | 'class-summary') => {
+    setActiveTab(tab);
+    window.scrollTo(0, 0);
   };
 
-  if (loading) {
+  const selectedStudent = students.find(s => s.id === formData.studentId);
+
+  if (loading && !teacherInfo) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-600">Loading...</div>
@@ -234,7 +239,7 @@ export default function TeacherAssessmentPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header with Logo and Navigation */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between mb-4">
@@ -248,164 +253,35 @@ export default function TeacherAssessmentPage() {
               />
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/teacher/dashboard" className="text-gray-600 hover:text-gray-900 text-sm font-medium">
+              <Link 
+                href="/teacher/dashboard"
+                className="text-blue-600 hover:text-blue-800 font-medium text-sm md:text-base"
+              >
                 ← Back to Dashboard
               </Link>
               <button
                 onClick={handleSignOut}
-                className="text-gray-600 hover:text-gray-900 font-medium"
+                className="text-gray-600 hover:text-gray-900 font-medium text-sm md:text-base"
               >
                 Sign Out
               </button>
             </div>
           </div>
-
-          {teacherInfo && (
-            <nav className="text-sm text-gray-600">
-              <div>
-                <p className="font-medium text-gray-900">{teacherInfo.name}</p>
-                <p className="text-xs text-gray-600">{teacherInfo.school}</p>
-              </div>
-            </nav>
-          )}
+          
+          {/* Breadcrumb Navigation */}
+          <nav className="text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <Link href="/teacher/dashboard" className="text-blue-600 hover:text-blue-800">
+                Teacher Dashboard
+              </Link>
+              <span>/</span>
+              <span className="font-medium text-gray-900">FitnessGram Assessment</span>
+            </div>
+          </nav>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">FitnessGram Assessment</h1>
-          <p className="text-gray-600">View student test results and data</p>
-        </div>
-
-        {/* Filter Selection Screen */}
-        {showFilters && (
-          <div className="bg-white rounded-lg shadow p-8 max-w-2xl mx-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Select Filters to View Results</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Test Year
-                </label>
-                <select
-                  value={filterYear}
-                  onChange={(e) => setFilterYear(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {[2026, 2025, 2024, 2023, 2022].map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Season
-                </label>
-                <select
-                  value={filterSeason}
-                  onChange={(e) => setFilterSeason(e.target.value as 'Fall' | 'Spring')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Fall">Fall</option>
-                  <option value="Spring">Spring</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  School
-                </label>
-                <input
-                  type="text"
-                  value={filterSchool}
-                  onChange={(e) => setFilterSchool(e.target.value)}
-                  placeholder="Enter school name"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Classroom Teacher
-                </label>
-                <select
-                  value={filterClassroomTeacher}
-                  onChange={(e) => setFilterClassroomTeacher(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- Select a classroom teacher --</option>
-                  {Array.from(new Set(students.map(s => s.classroomTeacher).filter(Boolean))).sort().map((teacher) => (
-                    <option key={teacher} value={teacher}>
-                      {teacher}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (filterClassroomTeacher) {
-                    setShowFilters(false);
-                  } else {
-                    setError('Please select a classroom teacher');
-                  }
-                }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition"
-              >
-                View Results
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Assessment Content - Only show when filters are applied */}
-        {!showFilters && (
-          <>
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm">
-                  <span className="font-medium text-gray-700">Viewing:</span>{' '}
-                  <span className="text-gray-900">{filterYear} {filterSeason}</span> • 
-                  <span className="text-gray-900"> {filterSchool || teacherInfo?.school}</span> • 
-                  <span className="text-gray-900"> {filterClassroomTeacher}</span>
-                </div>
-                <button
-                  onClick={() => setShowFilters(true)}
-                  className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                >
-                  Change Filters
-                </button>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-600 mb-6">
-              <strong>{students.filter(s => s.classroomTeacher === filterClassroomTeacher).length} students</strong> from <strong>{teacherInfo?.school}</strong>
-            </p>
-
-        {/* Classroom Teacher Selection */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 1: Select a Classroom Teacher</h2>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Which classroom teacher's students do you want to assess?
-          </label>
-          <select
-            value={selectedClassroomTeacher}
-            onChange={(e) => setSelectedClassroomTeacher(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
-          >
-            <option value="">-- Select a classroom teacher --</option>
-            {classroomTeachers.map((teacher) => {
-              const count = students.filter(s => s.classroomTeacher === teacher).length;
-              return (
-                <option key={teacher} value={teacher}>
-                  {teacher} ({count} students)
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
         {error && (
           <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
@@ -431,11 +307,7 @@ export default function TeacherAssessmentPage() {
           
           <div className="bg-gray-100 rounded-lg p-1 inline-flex gap-2 flex-wrap">
             <button
-              onClick={() => {
-                setActiveTab('enter');
-                setError('');
-                setSuccess('');
-              }}
+              onClick={() => setActiveTab('enter')}
               className={`px-4 py-2 font-medium rounded transition ${
                 activeTab === 'enter'
                   ? 'bg-blue-600 text-white shadow'
@@ -445,11 +317,7 @@ export default function TeacherAssessmentPage() {
               ✏️ Enter Test Data
             </button>
             <button
-              onClick={() => {
-                setActiveTab('view');
-                setError('');
-                setSuccess('');
-              }}
+              onClick={() => setActiveTab('view')}
               className={`px-4 py-2 font-medium rounded transition ${
                 activeTab === 'view'
                   ? 'bg-blue-600 text-white shadow'
@@ -459,11 +327,7 @@ export default function TeacherAssessmentPage() {
               👁️ View/Edit Tests
             </button>
             <button
-              onClick={() => {
-                setActiveTab('class-summary');
-                setError('');
-                setSuccess('');
-              }}
+              onClick={() => setActiveTab('class-summary')}
               className={`px-4 py-2 font-medium rounded transition ${
                 activeTab === 'class-summary'
                   ? 'bg-blue-600 text-white shadow'
@@ -475,487 +339,489 @@ export default function TeacherAssessmentPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
-          {/* Enter Test Data Tab */}
-          {activeTab === 'enter' && (
-            <div className="p-6">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Enter Test Data</h2>
-                <p className="text-gray-600 mb-4">Select a classroom teacher and enter FitnessGram scores for their students</p>
+        {/* Enter Test Data Tab */}
+        {activeTab === 'enter' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-6">Enter FitnessGram Test Data</h2>
 
+            {loading ? (
+              <p className="text-gray-600">Loading students...</p>
+            ) : (
+              <form onSubmit={handleSubmitTest} className="space-y-6">
                 {/* Classroom Teacher Selection */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Step 1: Select a Classroom Teacher
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Classroom Teacher *
                   </label>
                   <select
                     value={selectedClassroomTeacher}
-                    onChange={(e) => setSelectedClassroomTeacher(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+                    onChange={(e) => {
+                      setSelectedClassroomTeacher(e.target.value);
+                      setFormData({ ...formData, studentId: '' });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    required
                   >
-                    <option value="">-- Select a classroom teacher --</option>
-                    {classroomTeachers.map((teacher) => {
-                      const count = students.filter(s => s.classroomTeacher === teacher).length;
-                      return (
-                        <option key={teacher} value={teacher}>
-                          {teacher} ({count} students)
-                        </option>
-                      );
-                    })}
+                    <option value="">Select classroom teacher...</option>
+                    {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
+                      <option key={teacher} value={teacher}>{teacher}</option>
+                    ))}
                   </select>
                 </div>
 
-                {selectedClassroomTeacher && (
-                  <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-600">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      {selectedClassroomTeacher}'s Class
-                    </h3>
-                    <p className="text-gray-600 mb-6">
-                      {students.filter(s => s.classroomTeacher === selectedClassroomTeacher).length} students - Click to enter test data
-                    </p>
-
-                    {/* Students in Classroom - Expandable Forms */}
-                    <div className="space-y-3">
+                {/* Student Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Student *
+                    </label>
+                    <select
+                      name="studentId"
+                      value={formData.studentId}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
+                      disabled={!selectedClassroomTeacher}
+                    >
+                      <option value="">Select a student...</option>
                       {students
-                        .filter(s => s.classroomTeacher === selectedClassroomTeacher)
-                        .sort((a, b) => `${a.lastName}${a.firstName}`.localeCompare(`${b.lastName}${b.firstName}`))
-                        .map((student) => {
-                          const studentTest = tests.find(t => t.studentId === student.id);
-                          const isExpanded = formData.studentId === student.id;
+                        .filter(s => !selectedClassroomTeacher || s.classroomTeacher === selectedClassroomTeacher)
+                        .map(student => (
+                          <option key={student.id} value={student.id}>
+                            {student.firstName} {student.lastName} (Grade {student.currentGrade})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
 
-                          return (
-                            <div
-                              key={student.id}
-                              className={`bg-white rounded-lg border transition-all ${
-                                studentTest
-                                  ? 'border-green-300 bg-green-50'
-                                  : isExpanded
-                                  ? 'border-blue-400 shadow-lg'
-                                  : 'border-gray-200 hover:border-gray-300'
-                              }`}
-                            >
-                              {/* Student Header */}
-                              <div
-                                onClick={() => {
-                                  if (isExpanded) {
-                                    setFormData({ ...formData, studentId: '' });
-                                  } else {
-                                    setFormData({ ...formData, studentId: student.id });
-                                  }
-                                }}
-                                className="p-4 cursor-pointer flex items-center justify-between"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div>
-                                    <p className="font-semibold text-gray-900">
-                                      {student.firstName} {student.lastName}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      District ID: {student.districtId} | Grade {student.currentGrade}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  {studentTest && (
-                                    <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded">
-                                      ✓ Completed
-                                    </span>
-                                  )}
-                                  <span className="text-xl text-gray-400">
-                                    {isExpanded ? '▼' : '▶'}
-                                  </span>
-                                </div>
-                              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Test Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="testDate"
+                      value={formData.testDate}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  </div>
 
-                              {/* Expanded Form */}
-                              {isExpanded && (
-                                <form
-                                  onSubmit={(e) => {
-                                    e.preventDefault();
-                                    handleSubmitTest(e);
-                                  }}
-                                  className="border-t border-gray-200 p-4 bg-gray-50 space-y-4"
-                                >
-                                  {/* Test Date and Season */}
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Test Date *
-                                      </label>
-                                      <input
-                                        type="date"
-                                        name="testDate"
-                                        value={formData.testDate}
-                                        onChange={handleFormChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        required
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Season *
-                                      </label>
-                                      <select
-                                        name="testSeason"
-                                        value={formData.testSeason}
-                                        onChange={handleFormChange}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      >
-                                        <option value="Fall">Fall</option>
-                                        <option value="Spring">Spring</option>
-                                      </select>
-                                    </div>
-                                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Test Season *
+                    </label>
+                    <select
+                      name="testSeason"
+                      value={formData.testSeason}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      <option value="Fall">Fall</option>
+                      <option value="Spring">Spring</option>
+                    </select>
+                  </div>
+                </div>
 
-                                  {/* Test Measurements */}
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900 mb-3">Test Measurements</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Pacer or Mile Run
-                                        </label>
-                                        <input
-                                          type="number"
-                                          name="pacerOrMileRun"
-                                          value={formData.pacerOrMileRun || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="# of laps"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Pushups
-                                        </label>
-                                        <input
-                                          type="number"
-                                          name="pushups"
-                                          value={formData.pushups || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="# of reps"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Situps
-                                        </label>
-                                        <input
-                                          type="number"
-                                          name="situps"
-                                          value={formData.situps || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="# of reps"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Sit and Reach (inches)
-                                        </label>
-                                        <input
-                                          type="number"
-                                          step="0.1"
-                                          name="sitAndReach"
-                                          value={formData.sitAndReach || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="inches"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Height (inches)
-                                        </label>
-                                        <input
-                                          type="number"
-                                          step="0.1"
-                                          name="height"
-                                          value={formData.height || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="inches"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Weight (pounds)
-                                        </label>
-                                        <input
-                                          type="number"
-                                          step="0.1"
-                                          name="weight"
-                                          value={formData.weight || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="pounds"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          BMI (calculated)
-                                        </label>
-                                        <div className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700">
-                                          {formData.height && formData.weight
-                                            ? calculateBMI(formData.height, formData.weight)
-                                            : '-'}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Trunk Lift (inches)
-                                        </label>
-                                        <input
-                                          type="number"
-                                          step="0.1"
-                                          name="trunkLift"
-                                          value={formData.trunkLift || ''}
-                                          onChange={handleFormChange}
-                                          placeholder="inches"
-                                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Shoulder Stretch */}
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900 mb-3">Shoulder Stretch</h4>
-                                    <div className="flex gap-6">
-                                      <label className="flex items-center">
-                                        <input
-                                          type="checkbox"
-                                          name="shoulderStretchRight"
-                                          checked={formData.shoulderStretchRight || false}
-                                          onChange={handleFormChange}
-                                          className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                                        />
-                                        <span className="ml-2 text-sm text-gray-700">Right</span>
-                                      </label>
-                                      <label className="flex items-center">
-                                        <input
-                                          type="checkbox"
-                                          name="shoulderStretchLeft"
-                                          checked={formData.shoulderStretchLeft || false}
-                                          onChange={handleFormChange}
-                                          className="w-4 h-4 rounded border-gray-300 text-blue-600"
-                                        />
-                                        <span className="ml-2 text-sm text-gray-700">Left</span>
-                                      </label>
-                                    </div>
-                                  </div>
-
-                                  {/* Notes */}
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                      Notes
-                                    </label>
-                                    <textarea
-                                      name="notes"
-                                      value={formData.notes || ''}
-                                      onChange={handleFormChange}
-                                      placeholder="Any observations or notes..."
-                                      rows={2}
-                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                  </div>
-
-                                  {/* Actions */}
-                                  <div className="flex gap-3 pt-4">
-                                    <button
-                                      type="submit"
-                                      disabled={submitting}
-                                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 rounded-lg transition"
-                                    >
-                                      {submitting ? 'Saving...' : 'Save Test Data'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setFormData({ ...formData, studentId: '' })}
-                                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium rounded-lg transition"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </form>
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
+                {/* Student Info Display */}
+                {selectedStudent && (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <p className="text-sm"><strong>District ID:</strong> {selectedStudent.districtId}</p>
+                    <p className="text-sm"><strong>Grade:</strong> {selectedStudent.currentGrade}</p>
+                    <p className="text-sm"><strong>School:</strong> {selectedStudent.currentSchool}</p>
+                    <p className="text-sm"><strong>PE Teacher:</strong> {selectedStudent.peTeacher}</p>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* View/Edit Tests Tab */}
-          {activeTab === 'view' && (
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">View/Edit Test Data</h2>
-              
-              {/* Classroom Teacher Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Filter by Classroom Teacher
-                </label>
-                <select
-                  value={viewTestsTeacher}
-                  onChange={(e) => setViewTestsTeacher(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Classrooms</option>
-                  {classroomTeachers.map((teacher) => (
-                    <option key={teacher} value={teacher}>
-                      {teacher}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* Test Metrics */}
+                <div className="border-t pt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Test Metrics</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        PACER / 1-Mile Run (laps or minutes)
+                      </label>
+                      <input
+                        type="number"
+                        name="pacerOrMileRun"
+                        step="0.1"
+                        value={formData.pacerOrMileRun || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
 
-              {tests.length === 0 ? (
-                <p className="text-gray-600">No tests recorded yet. Start entering data in the "Enter Test Data" tab.</p>
-              ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pushups (count)
+                      </label>
+                      <input
+                        type="number"
+                        name="pushups"
+                        value={formData.pushups || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Situps (count)
+                      </label>
+                      <input
+                        type="number"
+                        name="situps"
+                        value={formData.situps || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sit and Reach (cm)
+                      </label>
+                      <input
+                        type="number"
+                        name="sitAndReach"
+                        step="0.5"
+                        value={formData.sitAndReach || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Height (inches)
+                      </label>
+                      <input
+                        type="number"
+                        name="height"
+                        step="0.1"
+                        value={formData.height || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Weight (pounds)
+                      </label>
+                      <input
+                        type="number"
+                        name="weight"
+                        step="0.1"
+                        value={formData.weight || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Trunk Lift (inches)
+                      </label>
+                      <input
+                        type="number"
+                        name="trunkLift"
+                        step="0.5"
+                        value={formData.trunkLift || ''}
+                        onChange={handleFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex items-end">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="shoulderStretchRight"
+                          checked={formData.shoulderStretchRight || false}
+                          onChange={handleFormChange}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm font-medium text-gray-700">
+                          Shoulder Stretch - Right
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex items-end">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="shoulderStretchLeft"
+                          checked={formData.shoulderStretchLeft || false}
+                          onChange={handleFormChange}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm font-medium text-gray-700">
+                          Shoulder Stretch - Left
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* BMI Display */}
+                  {formData.height && formData.weight && (
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm font-medium text-gray-900">
+                        Calculated BMI: {calculateBMI(formData.height, formData.weight)?.toFixed(1)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes || ''}
+                    onChange={handleFormChange}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Any additional notes about the test..."
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-end gap-4">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-2 px-6 rounded transition"
+                  >
+                    {submitting ? 'Saving...' : 'Save Test Data'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateTab('view')}
+                    className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded transition"
+                  >
+                    View/Edit Tests →
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* View/Edit Tests Tab */}
+        {activeTab === 'view' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-6">View & Edit Test Data</h2>
+            
+            {tests.length === 0 ? (
+              <p className="text-gray-600">No tests have been entered yet.</p>
+            ) : (
+              <div>
+                {/* Classroom Teacher Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Classroom Teacher
+                  </label>
+                  <select
+                    value={viewTestsTeacher}
+                    onChange={(e) => setViewTestsTeacher(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Classroom Teachers</option>
+                    {Array.from(new Set(tests.map(t => t.student.classroomTeacher).filter(Boolean))).sort().map(teacher => (
+                      <option key={teacher} value={teacher}>{teacher}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Student Name</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Classroom Teacher</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Student</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Teacher</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">District ID</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Grade</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Test Date</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Season</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Pacer/Mile</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Pushups</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Situps</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Height</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Weight</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">BMI</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tests
-                        .filter(test => {
-                          const matchesTeacher = viewTestsTeacher === '' || test.student.classroomTeacher === viewTestsTeacher;
-                          const matchesYear = test.testYear === parseInt(filterYear);
-                          const matchesSeason = test.testSeason === filterSeason;
-                          const matchesClassroom = test.student.classroomTeacher === filterClassroomTeacher;
-                          return matchesTeacher && matchesYear && matchesSeason && matchesClassroom;
-                        })
+                        .filter(test => !viewTestsTeacher || test.student.classroomTeacher === viewTestsTeacher)
                         .map((test) => (
-                          <tr
-                            key={test.id}
-                            className="border-t border-gray-200 hover:bg-gray-50"
-                          >
+                          <tr key={test.id} className="border-t border-gray-200 hover:bg-gray-50">
                             <td className="px-4 py-2">{test.student.firstName} {test.student.lastName}</td>
                             <td className="px-4 py-2">{test.student.classroomTeacher || '-'}</td>
-                            <td className="px-4 py-2">{test.testDate}</td>
+                            <td className="px-4 py-2">{test.student.districtId}</td>
+                            <td className="px-4 py-2">{test.student.currentGrade}</td>
+                            <td className="px-4 py-2">{new Date(test.testDate).toLocaleDateString()}</td>
                             <td className="px-4 py-2">{test.testSeason}</td>
-                            <td className="px-4 py-2">{test.pacerOrMileRun || '-'}</td>
-                            <td className="px-4 py-2">{test.pushups || '-'}</td>
-                            <td className="px-4 py-2">{test.situps || '-'}</td>
-                            <td className="px-4 py-2">{test.height ? `${test.height}"` : '-'}</td>
-                            <td className="px-4 py-2">{test.weight ? `${test.weight} lbs` : '-'}</td>
-                            <td className="px-4 py-2">{calculateBMI(test.height, test.weight) || '-'}</td>
+                            <td className="px-4 py-2">{test.height || '-'} in</td>
+                            <td className="px-4 py-2">{test.weight || '-'} lbs</td>
+                            <td className="px-4 py-2">{test.bmi ? test.bmi.toFixed(1) : '-'}</td>
+                            <td className="px-4 py-2">
+                              <button
+                                onClick={() => {
+                                  setEditingTestId(test.id);
+                                  const student = students.find(s => s.id === test.studentId);
+                                  if (student && student.classroomTeacher) {
+                                    setSelectedClassroomTeacher(student.classroomTeacher);
+                                  }
+                                  setFormData({
+                                    studentId: test.studentId,
+                                    testDate: test.testDate.split('T')[0],
+                                    testSeason: test.testSeason,
+                                    pacerOrMileRun: test.pacerOrMileRun || undefined,
+                                    pushups: test.pushups || undefined,
+                                    situps: test.situps || undefined,
+                                    sitAndReach: test.sitAndReach || undefined,
+                                    shoulderStretchRight: test.shoulderStretchRight || undefined,
+                                    shoulderStretchLeft: test.shoulderStretchLeft || undefined,
+                                    height: test.height || undefined,
+                                    weight: test.weight || undefined,
+                                    trunkLift: test.trunkLift || undefined,
+                                    notes: test.notes || undefined,
+                                  });
+                                  setActiveTab('enter');
+                                }}
+                                className="text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Edit
+                              </button>
+                            </td>
                           </tr>
                         ))}
                     </tbody>
                   </table>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Class Summary Tab */}
-          {activeTab === 'class-summary' && (
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Class Summary</h2>
-              
-              {/* Classroom Teacher Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select a Classroom Teacher
-                </label>
-                <select
-                  value={classSummaryTeacher}
-                  onChange={(e) => setClassSummaryTeacher(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- Select a classroom teacher --</option>
-                  {classroomTeachers.map((teacher) => (
-                    <option key={teacher} value={teacher}>
-                      {teacher}
-                    </option>
-                  ))}
-                </select>
               </div>
+            )}
 
-              {classSummaryTeacher && (
-                <div className="space-y-3">
-                  {students
-                    .filter(s => s.classroomTeacher === classSummaryTeacher)
-                    .sort((a, b) => `${a.lastName}${a.firstName}`.localeCompare(`${b.lastName}${b.firstName}`))
-                    .map((student) => {
-                      const studentTests = tests.filter(t => t.studentId === student.id);
-                      // Check if student has a complete test with all required fields
-                      const hasCompleteTest = studentTests.some(test => 
-                        test.pacerOrMileRun !== null && test.pacerOrMileRun !== undefined &&
-                        test.pushups !== null && test.pushups !== undefined &&
-                        test.situps !== null && test.situps !== undefined &&
-                        test.sitAndReach !== null && test.sitAndReach !== undefined &&
-                        test.height !== null && test.height !== undefined &&
-                        test.weight !== null && test.weight !== undefined &&
-                        test.trunkLift !== null && test.trunkLift !== undefined
-                        // shoulderStretchRight, shoulderStretchLeft, and notes are optional
-                      );
-                      const completed = hasCompleteTest;
-                      const completionPercent = completed ? 100 : 0;
-
-                      return (
-                        <div key={student.id} className="bg-gray-50 rounded p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {student.firstName} {student.lastName}
-                              </p>
-                              <p className="text-xs text-gray-600">ID: {student.districtId} | Grade {student.currentGrade}</p>
-                            </div>
-                            <span className={`px-3 py-1 rounded text-sm font-medium ${
-                              completed
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {completed ? '✓ Complete' : 'Pending'}
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-300 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                completed ? 'bg-green-600' : 'bg-yellow-500'
-                              }`}
-                              style={{ width: `${completionPercent}%` }}
-                            />
-                          </div>
-                          {studentTests.length > 0 && (
-                            <p className="text-xs text-gray-600 mt-2">
-                              {studentTests.length} test{studentTests.length !== 1 ? 's' : ''} recorded
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-
-              {!classSummaryTeacher && (
-                <p className="text-gray-600 text-center py-8">
-                  Select a classroom teacher to view their class summary
-                </p>
-              )}
+            {/* Navigation Buttons */}
+            <div className="flex justify-between gap-4 mt-8 pt-6 border-t border-gray-200">
+              <button
+                onClick={() => navigateTab('enter')}
+                className="text-gray-700 font-medium py-2 px-4 rounded border border-gray-300 hover:bg-gray-50 transition"
+              >
+                ← Back to Enter Data
+              </button>
+              <button
+                onClick={() => navigateTab('class-summary')}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition"
+              >
+                Next: Class Summary →
+              </button>
             </div>
-          )}
-        </div>
-          </>
+          </div>
+        )}
+
+        {/* Class Summary Tab */}
+        {activeTab === 'class-summary' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-6">Class Summary</h2>
+            
+            {students.length === 0 ? (
+              <p className="text-gray-600">No students found.</p>
+            ) : (
+              <div>
+                {/* Classroom Teacher Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Classroom Teacher
+                  </label>
+                  <select
+                    value={classSummaryTeacher}
+                    onChange={(e) => setClassSummaryTeacher(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Classroom Teachers</option>
+                    {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
+                      <option key={teacher} value={teacher}>{teacher}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-6">
+                  {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map((teacher) => {
+                    // Skip if filtering and teacher doesn't match
+                    if (classSummaryTeacher && teacher !== classSummaryTeacher) {
+                      return null;
+                    }
+
+                    const classStudents = students.filter(s => s.classroomTeacher === teacher);
+                    const completedCount = tests.filter(t => classStudents.some(cs => cs.id === t.studentId)).length;
+                    
+                    return (
+                      <div key={teacher} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900">{teacher}</h3>
+                          <span className="text-sm font-medium text-gray-600">
+                            {completedCount} of {classStudents.length} tests completed
+                          </span>
+                        </div>
+                        
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-all"
+                            style={{ width: `${classStudents.length > 0 ? (completedCount / classStudents.length) * 100 : 0}%` }}
+                          ></div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {classStudents.map((student) => {
+                            const studentTest = tests.find(t => t.studentId === student.id);
+                            return (
+                              <div key={student.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                <span className="text-sm font-medium text-gray-900">
+                                  {student.firstName} {student.lastName}
+                                </span>
+                                {studentTest ? (
+                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                                    ✓ {new Date(studentTest.testDate).toLocaleDateString()}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="flex justify-between gap-4 mt-8 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => navigateTab('view')}
+                    className="text-gray-700 font-medium py-2 px-4 rounded border border-gray-300 hover:bg-gray-50 transition"
+                  >
+                    ← Back to View/Edit Tests
+                  </button>
+                  <Link
+                    href="/teacher/dashboard"
+                    className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded transition inline-block text-center"
+                  >
+                    Return to Dashboard →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </main>
     </div>
