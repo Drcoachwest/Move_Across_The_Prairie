@@ -46,6 +46,7 @@ model Teacher {
   activated Boolean    @default(false)
   activatedAt DateTime?
   activationCodeUsed String? // code that was used to activate
+  locked    Boolean    @default(false) // Temporary account restriction
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   
@@ -139,6 +140,7 @@ model Student {
   districtId        String     @unique // unique identifier across schools
   firstName         String
   lastName          String
+  sex               String     // M/F for FitnessGram standards
   dateOfBirth       DateTime
   currentGrade      Int        // 3-12
   currentSchool     String

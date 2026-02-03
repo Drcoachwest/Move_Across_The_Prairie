@@ -9,11 +9,12 @@ interface Student {
   districtId: string;
   firstName: string;
   lastName: string;
+  sex: string;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
   peTeacher: string;
-  classroomTeacher?: string;
+  classroomTeacher?: string; // Added classroomTeacher to the Student interface
 }
 
 interface FormData {
@@ -56,6 +57,7 @@ interface TestData {
     currentGrade: number;
     currentSchool: string;
     peTeacher: string;
+    classroomTeacher?: string;
   };
 }
 
@@ -68,9 +70,9 @@ export default function AssessmentPage() {
   const [activeTab, setActiveTab] = useState<'import' | 'enter' | 'view' | 'class-summary'>('import');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [selectedClassroomTeacher, setSelectedClassroomTeacher] = useState<string>('');
-  const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [classSummaryTeacher, setClassSummaryTeacher] = useState<string>('');
   const [viewTestsTeacher, setViewTestsTeacher] = useState<string>('');
+  const [viewTestsSchool, setViewTestsSchool] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
@@ -195,7 +197,6 @@ export default function AssessmentPage() {
         testDate: new Date().toISOString().split('T')[0],
         testSeason: 'Fall',
       });
-      setEditingTestId(null);
       setSelectedClassroomTeacher('');
       
       // Reload tests list
@@ -349,7 +350,7 @@ export default function AssessmentPage() {
                 Upload a CSV file with student data. Required columns:
               </p>
               <code className="text-xs bg-gray-100 p-2 block rounded mb-3">
-                districtId, firstName, lastName, dateOfBirth, grade, school, peTeacher
+                districtId, firstName, lastName, sex, dateOfBirth, grade, school, peTeacher
               </code>
               <button
                 onClick={getDownloadTemplate}
@@ -449,7 +450,7 @@ export default function AssessmentPage() {
                           const hasCompletedTest = tests.some(t => t.studentId === student.id);
                           return (
                             <option key={student.id} value={student.id}>
-                              {hasCompletedTest ? '✓ ' : ''}{student.firstName} {student.lastName} (Grade {student.currentGrade})
+                              {hasCompletedTest ? '✓ ' : '○ '}{student.firstName} {student.lastName} (Grade {student.currentGrade})
                             </option>
                           );
                         })}
@@ -692,21 +693,50 @@ export default function AssessmentPage() {
               <p className="text-gray-600">No tests have been entered yet.</p>
             ) : (
               <div>
-                {/* Classroom Teacher Filter */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Filter by Classroom Teacher
-                  </label>
-                  <select
-                    value={viewTestsTeacher}
-                    onChange={(e) => setViewTestsTeacher(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Classroom Teachers</option>
-                    {Array.from(new Set(tests.map(t => t.student.classroomTeacher).filter(Boolean))).sort().map(teacher => (
-                      <option key={teacher} value={teacher}>{teacher}</option>
-                    ))}
-                  </select>
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Filter by School
+                    </label>
+                    <select
+                      value={viewTestsSchool}
+                      onChange={(e) => {
+                        setViewTestsSchool(e.target.value);
+                        setViewTestsTeacher('');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">All Schools</option>
+                      {Array.from(new Set(tests.map(t => t.student.currentSchool).filter(Boolean))).sort().map((school) => (
+                        <option key={school} value={school}>{school}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Filter by Classroom Teacher
+                    </label>
+                    <select
+                      value={viewTestsTeacher}
+                      onChange={(e) => setViewTestsTeacher(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">All Classroom Teachers</option>
+                      {Array.from(
+                        new Set(
+                          tests
+                            .filter(t => !viewTestsSchool || t.student.currentSchool === viewTestsSchool)
+                            .map(t => t.student.classroomTeacher)
+                            .filter(Boolean)
+                        )
+                      )
+                        .sort()
+                        .map(teacher => (
+                          <option key={teacher} value={teacher}>{teacher}</option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -727,6 +757,7 @@ export default function AssessmentPage() {
                     </thead>
                     <tbody>
                       {tests
+                        .filter(test => !viewTestsSchool || test.student.currentSchool === viewTestsSchool)
                         .filter(test => !viewTestsTeacher || test.student.classroomTeacher === viewTestsTeacher)
                         .map((test) => (
                           <tr key={test.id} className="border-t border-gray-200 hover:bg-gray-50">
@@ -742,7 +773,6 @@ export default function AssessmentPage() {
                             <td className="px-4 py-2">
                               <button
                                 onClick={() => {
-                                  setEditingTestId(test.id);
                                   setFormData({
                                     studentId: test.studentId,
                                     testDate: test.testDate.split('T')[0],

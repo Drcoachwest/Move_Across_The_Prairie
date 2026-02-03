@@ -23,18 +23,23 @@ export default function TeacherProfileSetup() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Get email from session
+    // Get email from temp session (during profile setup)
     const checkSession = async () => {
       try {
         const response = await fetch("/api/auth/check-session");
         const data = await response.json();
         
-        if (!data.email) {
+        // Only allow access if we have temp cookies (in setup mode)
+        if (!data.inSetup || !data.email) {
           router.push("/auth/teacher-signin");
           return;
         }
-        
+
         setEmail(data.email);
+        setName("");
+        setSchool("");
+        setPassword("");
+        setConfirmPassword("");
       } catch (err) {
         router.push("/auth/teacher-signin");
       }
@@ -107,13 +112,15 @@ export default function TeacherProfileSetup() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Email
             </label>
             <input
               type="email"
+              name="teacherEmail"
+              autoComplete="off"
               value={email}
               disabled
               className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
@@ -126,6 +133,8 @@ export default function TeacherProfileSetup() {
             </label>
             <input
               type="text"
+              name="fullName"
+              autoComplete="off"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter your full name"
@@ -162,6 +171,8 @@ export default function TeacherProfileSetup() {
             </label>
             <input
               type="password"
+              name="newPassword"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter a password (min 6 characters)"
@@ -176,6 +187,8 @@ export default function TeacherProfileSetup() {
             </label>
             <input
               type="password"
+              name="confirmNewPassword"
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Re-enter your password"

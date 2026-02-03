@@ -1,41 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 
 export default function AdminDashboard() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gray-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-          <div className="flex items-center gap-3">
-            <Link href="/admin/dashboard" className="hover:opacity-80 transition">
-              <Image
-                src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
-                alt="Move Across the Prairie logo"
-                width={80}
-                height={80}
-                className="h-12 sm:h-20 w-auto"
-                priority
-              />
-            </Link>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          </div>
-          <button
-            onClick={async () => {
-              const response = await fetch("/api/auth/admin-signout", { method: "POST" });
-              window.location.href = response.url;
-            }}
-            className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800"
-          >
-            Sign Out
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12">
+    <div className="max-w-7xl mx-auto px-4 py-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-8">
           Administration & Control Center
         </h2>
@@ -146,7 +115,6 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
-      </main>
     </div>
   );
 }

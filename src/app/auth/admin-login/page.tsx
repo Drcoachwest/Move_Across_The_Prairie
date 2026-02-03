@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -48,8 +49,26 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1">
+          <div className="flex items-center justify-center">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie"
+              width={180}
+              height={180}
+              className="h-[180px] w-auto"
+              priority
+            />
+          </div>
+        </div>
+      </header>
+
+      {/* Login Form */}
+      <div className="flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-md p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Login</h1>
           <p className="text-gray-600 mb-6">
@@ -107,6 +126,7 @@ export default function AdminLogin() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

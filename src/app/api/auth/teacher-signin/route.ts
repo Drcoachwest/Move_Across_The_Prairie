@@ -84,9 +84,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedActivationCode = activationCode.trim().toUpperCase();
+
     // Verify activation code
     const code = await prisma.activationCode.findUnique({
-      where: { code: activationCode },
+      where: { code: normalizedActivationCode },
     });
 
     if (!code || !code.active) {
@@ -112,19 +114,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create temp session for profile setup
+    // Create temp session for profile setup - clear any existing session first
     const cookieStore = await cookies();
+    
+    // Clear any existing teacher session
+    cookieStore.delete("teacher_session");
+    cookieStore.delete("teacher_info");
+    
     cookieStore.set("temp_teacher_email", email, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
       maxAge: 60 * 15, // 15 minutes to complete profile
     });
 
-    cookieStore.set("temp_activation_code", activationCode, {
+    cookieStore.set("temp_activation_code", normalizedActivationCode, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
       maxAge: 60 * 15,
     });
 

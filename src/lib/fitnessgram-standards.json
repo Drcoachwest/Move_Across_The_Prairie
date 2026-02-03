@@ -1,0 +1,670 @@
+{
+  "boys": {
+    "cardio": {
+      "10": {
+        "pacer20": {
+          "min": 23.0,
+          "max": 61.0
+        },
+        "bmi": {
+          "min": 14.0,
+          "max": 21.0
+        }
+      },
+      "11": {
+        "pacer20": {
+          "min": 23.0,
+          "max": 72.0
+        },
+        "bmi": {
+          "min": 14.3,
+          "max": 21.0
+        }
+      },
+      "12": {
+        "pacer20": {
+          "min": 32.0,
+          "max": 72.0
+        },
+        "bmi": {
+          "min": 14.6,
+          "max": 22.0
+        }
+      },
+      "13": {
+        "pacer20": {
+          "min": 41.0,
+          "max": 83.0
+        },
+        "bmi": {
+          "min": 15.1,
+          "max": 23.0
+        }
+      },
+      "14": {
+        "pacer20": {
+          "min": 41.0,
+          "max": 83.0
+        },
+        "bmi": {
+          "min": 15.6,
+          "max": 24.5
+        }
+      },
+      "15": {
+        "pacer20": {
+          "min": 51.0,
+          "max": 94.0
+        },
+        "bmi": {
+          "min": 16.2,
+          "max": 25.0
+        }
+      },
+      "16": {
+        "pacer20": {
+          "min": 61.0,
+          "max": 94.0
+        },
+        "bmi": {
+          "min": 16.6,
+          "max": 26.5
+        }
+      },
+      "17": {
+        "pacer20": {
+          "min": 61.0,
+          "max": 106.0
+        },
+        "bmi": {
+          "min": 17.3,
+          "max": 27.0
+        }
+      },
+      "17+": {
+        "pacer20": {
+          "min": 72.0,
+          "max": 106.0
+        },
+        "bmi": {
+          "min": 17.8,
+          "max": 27.8
+        }
+      }
+    },
+    "muscular": {
+      "5": {
+        "curlup": {
+          "min": 2.0,
+          "max": 10.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 3.0,
+          "max": 8.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "6": {
+        "curlup": {
+          "min": 2.0,
+          "max": 10.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 3.0,
+          "max": 8.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "7": {
+        "curlup": {
+          "min": 4.0,
+          "max": 14.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 4.0,
+          "max": 10.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "8": {
+        "curlup": {
+          "min": 6.0,
+          "max": 20.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 5.0,
+          "max": 13.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "9": {
+        "curlup": {
+          "min": 9.0,
+          "max": 24.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 6.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "10": {
+        "curlup": {
+          "min": 12.0,
+          "max": 24.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 20.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "11": {
+        "curlup": {
+          "min": 15.0,
+          "max": 28.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 8.0,
+          "max": 20.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "12": {
+        "curlup": {
+          "min": 18.0,
+          "max": 36.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 10.0,
+          "max": 20.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "13": {
+        "curlup": {
+          "min": 21.0,
+          "max": 40.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 12.0,
+          "max": 25.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "14": {
+        "curlup": {
+          "min": 24.0,
+          "max": 45.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 14.0,
+          "max": 30.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "15": {
+        "curlup": {
+          "min": 24.0,
+          "max": 47.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 16.0,
+          "max": 35.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "16": {
+        "curlup": {
+          "min": 24.0,
+          "max": 47.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "17": {
+        "curlup": {
+          "min": 24.0,
+          "max": 47.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      },
+      "17+": {
+        "curlup": {
+          "min": 24.0,
+          "max": 47.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "sitAndReach": {
+          "min": 8.0
+        }
+      }
+    }
+  },
+  "girls": {
+    "cardio": {
+      "10": {
+        "pacer20": {
+          "min": 7.0,
+          "max": 41.0
+        },
+        "bmi": {
+          "min": 13.7,
+          "max": 23.5
+        }
+      },
+      "11": {
+        "pacer20": {
+          "min": 15.0,
+          "max": 41.0
+        },
+        "bmi": {
+          "min": 14.0,
+          "max": 24.0
+        }
+      },
+      "12": {
+        "pacer20": {
+          "min": 15.0,
+          "max": 41.0
+        },
+        "bmi": {
+          "min": 14.5,
+          "max": 24.5
+        }
+      },
+      "13": {
+        "pacer20": {
+          "min": 23.0,
+          "max": 51.0
+        },
+        "bmi": {
+          "min": 14.9,
+          "max": 24.5
+        }
+      },
+      "14": {
+        "pacer20": {
+          "min": 23.0,
+          "max": 51.0
+        },
+        "bmi": {
+          "min": 15.4,
+          "max": 25.0
+        }
+      },
+      "15": {
+        "pacer20": {
+          "min": 32.0,
+          "max": 51.0
+        },
+        "bmi": {
+          "min": 16.0,
+          "max": 25.0
+        }
+      },
+      "16": {
+        "pacer20": {
+          "min": 32.0,
+          "max": 61.0
+        },
+        "bmi": {
+          "min": 16.4,
+          "max": 25.0
+        }
+      },
+      "17": {
+        "pacer20": {
+          "min": 41.0,
+          "max": 61.0
+        },
+        "bmi": {
+          "min": 16.8,
+          "max": 26.0
+        }
+      },
+      "17+": {
+        "pacer20": {
+          "min": 41.0,
+          "max": 72.0
+        },
+        "bmi": {
+          "min": 17.2,
+          "max": 27.3
+        }
+      }
+    },
+    "muscular": {
+      "5": {
+        "curlup": {
+          "min": 2.0,
+          "max": 10.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 3.0,
+          "max": 8.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "6": {
+        "curlup": {
+          "min": 2.0,
+          "max": 10.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 3.0,
+          "max": 8.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "7": {
+        "curlup": {
+          "min": 4.0,
+          "max": 14.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 4.0,
+          "max": 10.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "8": {
+        "curlup": {
+          "min": 6.0,
+          "max": 20.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 5.0,
+          "max": 13.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "9": {
+        "curlup": {
+          "min": 9.0,
+          "max": 22.0
+        },
+        "trunkLift": {
+          "min": 6.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 6.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "10": {
+        "curlup": {
+          "min": 12.0,
+          "max": 26.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 9.0
+        }
+      },
+      "11": {
+        "curlup": {
+          "min": 15.0,
+          "max": 29.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 10.0
+        }
+      },
+      "12": {
+        "curlup": {
+          "min": 18.0,
+          "max": 32.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 10.0
+        }
+      },
+      "13": {
+        "curlup": {
+          "min": 18.0,
+          "max": 32.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 10.0
+        }
+      },
+      "14": {
+        "curlup": {
+          "min": 18.0,
+          "max": 32.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 10.0
+        }
+      },
+      "15": {
+        "curlup": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 12.0
+        }
+      },
+      "16": {
+        "curlup": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 12.0
+        }
+      },
+      "17": {
+        "curlup": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 12.0
+        }
+      },
+      "17+": {
+        "curlup": {
+          "min": 18.0,
+          "max": 35.0
+        },
+        "trunkLift": {
+          "min": 9.0,
+          "max": 12.0
+        },
+        "pushup90": {
+          "min": 7.0,
+          "max": 15.0
+        },
+        "sitAndReach": {
+          "min": 12.0
+        }
+      }
+    }
+  }
+}

@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import standards from '@/lib/fitnessgram-standards.json';
 
 interface Student {
   id: string;
   districtId: string;
   firstName: string;
   lastName: string;
+  sex: string;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
@@ -57,6 +57,7 @@ interface TestData {
     currentGrade: number;
     currentSchool: string;
     peTeacher: string;
+    classroomTeacher?: string;
   };
 }
 
@@ -67,8 +68,21 @@ interface TeacherInfo {
   school: string;
 }
 
+type FitnessComponent = 'pacerOrMileRun' | 'pushups' | 'situps' | 'sitAndReach' | 'trunkLift' | 'bmi';
+
+type StandardsRange = { min?: number; max?: number };
+type StandardsData = {
+  boys: {
+    cardio: Record<string, { pacer20?: StandardsRange; bmi?: StandardsRange }>;
+    muscular: Record<string, { curlup?: StandardsRange; trunkLift?: StandardsRange; pushup90?: StandardsRange; sitAndReach?: { min?: number } }>;
+  };
+  girls: {
+    cardio: Record<string, { pacer20?: StandardsRange; bmi?: StandardsRange }>;
+    muscular: Record<string, { curlup?: StandardsRange; trunkLift?: StandardsRange; pushup90?: StandardsRange; sitAndReach?: { min?: number } }>;
+  };
+};
+
 export default function TeacherAssessmentPage() {
-  const router = useRouter();
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [tests, setTests] = useState<TestData[]>([]);
@@ -76,10 +90,13 @@ export default function TeacherAssessmentPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'enter' | 'view' | 'class-summary'>('enter');
+  const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedClassroomTeacher, setSelectedClassroomTeacher] = useState<string>('');
-  const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
   const [classSummaryTeacher, setClassSummaryTeacher] = useState<string>('');
+  const [classSummaryGrade, setClassSummaryGrade] = useState<string>('');
   const [viewTestsTeacher, setViewTestsTeacher] = useState<string>('');
+  const [viewTestsGrade, setViewTestsGrade] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
@@ -87,25 +104,31 @@ export default function TeacherAssessmentPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  // Check teacher session
+  // Get teacher info from session
   useEffect(() => {
-    const checkSession = async () => {
+    const getTeacherInfo = async () => {
       try {
         const response = await fetch('/api/auth/check-session');
-        if (!response.ok) {
-          router.push('/auth/teacher-signin');
-          return;
-        }
-        const data = await response.json();
-        if (data.teacher) {
-          setTeacherInfo(data.teacher);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.teacher) {
+            setTeacherInfo(data.teacher);
+            setLoading(false);
+          } else {
+            // No teacher in session, redirect to login
+            window.location.href = '/auth/signin';
+          }
+        } else {
+          // Not authenticated, redirect to login
+          window.location.href = '/auth/signin';
         }
       } catch (err) {
-        router.push('/auth/teacher-signin');
+        console.error('Failed to get teacher info:', err);
+        window.location.href = '/auth/signin';
       }
     };
-    checkSession();
-  }, [router]);
+    getTeacherInfo();
+  }, []);
 
   const loadStudents = async () => {
     try {
@@ -143,11 +166,46 @@ export default function TeacherAssessmentPage() {
       loadStudents();
       loadTests();
     }
-  }, [activeTab, teacherInfo]);
+  }, [teacherInfo]);
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
+
+    // If changing student, check if they have an existing test
+    if (name === 'studentId') {
+      const existingTest = tests.find(t => t.studentId === value);
+      if (existingTest) {
+        const formattedTestDate = existingTest.testDate
+          ? new Date(existingTest.testDate).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0];
+        // Load existing test data
+        setFormData({
+          studentId: value,
+          testDate: formattedTestDate,
+          testSeason: existingTest.testSeason,
+          pacerOrMileRun: existingTest.pacerOrMileRun,
+          pushups: existingTest.pushups,
+          situps: existingTest.situps,
+          sitAndReach: existingTest.sitAndReach,
+          shoulderStretchRight: existingTest.shoulderStretchRight,
+          shoulderStretchLeft: existingTest.shoulderStretchLeft,
+          height: existingTest.height,
+          weight: existingTest.weight,
+          trunkLift: existingTest.trunkLift,
+          notes: existingTest.notes,
+        });
+        return;
+      } else {
+        // New test - reset form
+        setFormData({
+          studentId: value,
+          testDate: new Date().toISOString().split('T')[0],
+          testSeason: formData.testSeason,
+        });
+        return;
+      }
+    }
 
     setFormData(prev => ({
       ...prev,
@@ -159,6 +217,59 @@ export default function TeacherAssessmentPage() {
     if (!height || !weight) return undefined;
     // BMI = (weight in pounds / (height in inches)^2) * 703
     return (weight / (height * height)) * 703;
+  };
+
+  const calculateAge = (dateOfBirth: string, testDate: string) => {
+    if (!dateOfBirth || !testDate) return undefined;
+    const dob = new Date(dateOfBirth);
+    const test = new Date(testDate);
+    let age = test.getFullYear() - dob.getFullYear();
+    const monthDiff = test.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && test.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age;
+  };
+
+  const getFitnessZone = (
+    component: FitnessComponent,
+    value: number | undefined,
+    age: number | undefined,
+    sex: string | undefined
+  ) => {
+    if (value === undefined || age === undefined || !sex) return undefined;
+
+    const data = standards as StandardsData;
+    const sexKey = sex.toUpperCase().startsWith('M') ? 'boys' : 'girls';
+    const ageKey = age >= 17 ? '17+' : String(age);
+    const ageCardio = data[sexKey].cardio[ageKey];
+    const ageMuscular = data[sexKey].muscular[ageKey];
+
+    let range: StandardsRange | { min?: number } | undefined;
+    if (component === 'pacerOrMileRun') range = ageCardio?.pacer20;
+    if (component === 'bmi') range = ageCardio?.bmi;
+    if (component === 'pushups') range = ageMuscular?.pushup90;
+    if (component === 'situps') range = ageMuscular?.curlup;
+    if (component === 'trunkLift') range = ageMuscular?.trunkLift;
+    if (component === 'sitAndReach') range = ageMuscular?.sitAndReach;
+
+    if (!range) return 'Zone: No standard';
+
+    const min = 'min' in range ? range.min : undefined;
+    const max = 'max' in range ? (range as StandardsRange).max : undefined;
+
+    if (min !== undefined && max !== undefined) {
+      if (value < min) return 'Zone: Needs Improvement (Low)';
+      if (value > max) return 'Zone: Needs Improvement (High)';
+      return 'Zone: Healthy Fitness Zone';
+    }
+
+    if (min !== undefined) {
+      if (value < min) return 'Zone: Needs Improvement';
+      return 'Zone: Healthy Fitness Zone';
+    }
+
+    return 'Zone: No standard';
   };
 
   const handleSubmitTest = async (e: React.FormEvent) => {
@@ -199,10 +310,9 @@ export default function TeacherAssessmentPage() {
         testDate: new Date().toISOString().split('T')[0],
         testSeason: formData.testSeason,
       });
-      setEditingTestId(null);
       
-      // Show success message for 5 seconds
-      setTimeout(() => setSuccess(''), 5000);
+      // Show success message for 2 seconds
+      setTimeout(() => setSuccess(''), 2000);
       
       // Reload tests list
       await loadTests();
@@ -213,76 +323,49 @@ export default function TeacherAssessmentPage() {
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await fetch('/api/auth/signout', { method: 'POST' });
-      router.push('/auth/teacher-signin');
-    } catch (err) {
-      console.error('Signout error:', err);
-    }
-  };
-
   const navigateTab = (tab: 'enter' | 'view' | 'class-summary') => {
     setActiveTab(tab);
     window.scrollTo(0, 0);
   };
 
   const selectedStudent = students.find(s => s.id === formData.studentId);
+  const selectedStudentAge = selectedStudent
+    ? calculateAge(selectedStudent.dateOfBirth, formData.testDate)
+    : undefined;
+  const currentBMI = calculateBMI(formData.height, formData.weight);
+  const viewableTests = teacherInfo
+    ? tests.filter(test => test.student.currentSchool === teacherInfo.school)
+    : tests;
+
+  const availableGrades = Array.from(new Set(students.map(s => s.currentGrade))).sort((a, b) => a - b);
+  const gradeFilteredStudents = selectedGrade
+    ? students.filter(s => s.currentGrade === Number(selectedGrade))
+    : students;
+  const classroomFilteredStudents = gradeFilteredStudents.filter(
+    s => !selectedClassroomTeacher || s.classroomTeacher === selectedClassroomTeacher
+  );
+
+  const viewTestsGrades = Array.from(new Set(viewableTests.map(t => t.student.currentGrade))).sort((a, b) => a - b);
+  const viewGradeFilteredTests = viewTestsGrade
+    ? viewableTests.filter(t => t.student.currentGrade === Number(viewTestsGrade))
+    : viewableTests;
+
+  const classSummaryGrades = Array.from(new Set(students.map(s => s.currentGrade))).sort((a, b) => a - b);
+  const classSummaryFilteredStudents = classSummaryGrade
+    ? students.filter(s => s.currentGrade === Number(classSummaryGrade))
+    : students;
 
   if (loading && !teacherInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-gray-600">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with Logo and Navigation */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <Link href="/teacher/dashboard" className="flex items-center hover:opacity-80 transition">
-              <Image
-                src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
-                alt="Move Across the Prairie"
-                width={60}
-                height={60}
-                className="h-[60px] w-auto"
-              />
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/teacher/dashboard"
-                className="text-blue-600 hover:text-blue-800 font-medium text-sm md:text-base"
-              >
-                ← Back to Dashboard
-              </Link>
-              <button
-                onClick={handleSignOut}
-                className="text-gray-600 hover:text-gray-900 font-medium text-sm md:text-base"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-          
-          {/* Breadcrumb Navigation */}
-          <nav className="text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <Link href="/teacher/dashboard" className="text-blue-600 hover:text-blue-800">
-                Teacher Dashboard
-              </Link>
-              <span>/</span>
-              <span className="font-medium text-gray-900">FitnessGram Assessment</span>
-            </div>
-          </nav>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {error && (
           <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
           </div>
@@ -348,6 +431,28 @@ export default function TeacherAssessmentPage() {
               <p className="text-gray-600">Loading students...</p>
             ) : (
               <form onSubmit={handleSubmitTest} className="space-y-6">
+                {/* Grade Level Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Grade Level *
+                  </label>
+                  <select
+                    value={selectedGrade}
+                    onChange={(e) => {
+                      setSelectedGrade(e.target.value);
+                      setSelectedClassroomTeacher('');
+                      setFormData({ ...formData, studentId: '' });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select grade level...</option>
+                    {availableGrades.map(grade => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Classroom Teacher Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -361,9 +466,10 @@ export default function TeacherAssessmentPage() {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     required
+                    disabled={!selectedGrade}
                   >
                     <option value="">Select classroom teacher...</option>
-                    {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
+                    {Array.from(new Set(gradeFilteredStudents.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
                       <option key={teacher} value={teacher}>{teacher}</option>
                     ))}
                   </select>
@@ -381,16 +487,15 @@ export default function TeacherAssessmentPage() {
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       required
-                      disabled={!selectedClassroomTeacher}
+                      disabled={!selectedGrade || !selectedClassroomTeacher}
                     >
                       <option value="">Select a student...</option>
-                      {students
-                        .filter(s => !selectedClassroomTeacher || s.classroomTeacher === selectedClassroomTeacher)
+                      {classroomFilteredStudents
                         .map(student => {
                           const hasCompletedTest = tests.some(t => t.studentId === student.id);
                           return (
                             <option key={student.id} value={student.id}>
-                              {hasCompletedTest ? '✓ ' : ''}{student.firstName} {student.lastName} (Grade {student.currentGrade})
+                              {hasCompletedTest ? '✓ ' : '○ '}{student.firstName} {student.lastName} (Grade {student.currentGrade})
                             </option>
                           );
                         })}
@@ -433,6 +538,9 @@ export default function TeacherAssessmentPage() {
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <p className="text-sm"><strong>District ID:</strong> {selectedStudent.districtId}</p>
                     <p className="text-sm"><strong>Grade:</strong> {selectedStudent.currentGrade}</p>
+                    <p className="text-sm"><strong>Age:</strong> {selectedStudentAge ?? '-'} years</p>
+                    <p className="text-sm"><strong>Date of Birth:</strong> {selectedStudent.dateOfBirth}</p>
+                    <p className="text-sm"><strong>Sex:</strong> {selectedStudent.sex}</p>
                     <p className="text-sm"><strong>School:</strong> {selectedStudent.currentSchool}</p>
                     <p className="text-sm"><strong>PE Teacher:</strong> {selectedStudent.peTeacher}</p>
                   </div>
@@ -455,6 +563,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      </p>
                     </div>
 
                     <div>
@@ -468,6 +583,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('pushups', formData.pushups, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('pushups', formData.pushups, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      </p>
                     </div>
 
                     <div>
@@ -481,6 +603,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('situps', formData.situps, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('situps', formData.situps, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      </p>
                     </div>
 
                     <div>
@@ -495,6 +624,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('sitAndReach', formData.sitAndReach, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('sitAndReach', formData.sitAndReach, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      </p>
                     </div>
 
                     <div>
@@ -523,6 +659,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex) || 'BMI Zone: —'}
+                      </p>
                     </div>
 
                     <div>
@@ -537,6 +680,13 @@ export default function TeacherAssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('trunkLift', formData.trunkLift, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('trunkLift', formData.trunkLift, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      </p>
                     </div>
 
                     <div className="flex items-end">
@@ -622,10 +772,30 @@ export default function TeacherAssessmentPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-2xl font-bold mb-6">View & Edit Test Data</h2>
             
-            {tests.length === 0 ? (
+            {viewableTests.length === 0 ? (
               <p className="text-gray-600">No tests have been entered yet.</p>
             ) : (
               <div>
+                {/* Grade Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Grade Level
+                  </label>
+                  <select
+                    value={viewTestsGrade}
+                    onChange={(e) => {
+                      setViewTestsGrade(e.target.value);
+                      setViewTestsTeacher('');
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Grades</option>
+                    {viewTestsGrades.map(grade => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Classroom Teacher Filter */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -635,9 +805,10 @@ export default function TeacherAssessmentPage() {
                     value={viewTestsTeacher}
                     onChange={(e) => setViewTestsTeacher(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!viewTestsGrade}
                   >
                     <option value="">All Classroom Teachers</option>
-                    {Array.from(new Set(tests.map(t => t.student.classroomTeacher).filter(Boolean))).sort().map(teacher => (
+                    {Array.from(new Set(viewGradeFilteredTests.map(t => t.student.classroomTeacher).filter(Boolean))).sort().map(teacher => (
                       <option key={teacher} value={teacher}>{teacher}</option>
                     ))}
                   </select>
@@ -653,57 +824,117 @@ export default function TeacherAssessmentPage() {
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Grade</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Test Date</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Season</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Pacer/Mile</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Height</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Weight</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">BMI</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {tests
+                      {viewGradeFilteredTests
                         .filter(test => !viewTestsTeacher || test.student.classroomTeacher === viewTestsTeacher)
                         .map((test) => (
-                          <tr key={test.id} className="border-t border-gray-200 hover:bg-gray-50">
-                            <td className="px-4 py-2">{test.student.firstName} {test.student.lastName}</td>
-                            <td className="px-4 py-2">{test.student.classroomTeacher || '-'}</td>
-                            <td className="px-4 py-2">{test.student.districtId}</td>
-                            <td className="px-4 py-2">{test.student.currentGrade}</td>
-                            <td className="px-4 py-2">{new Date(test.testDate).toLocaleDateString()}</td>
-                            <td className="px-4 py-2">{test.testSeason}</td>
-                            <td className="px-4 py-2">{test.height || '-'} in</td>
-                            <td className="px-4 py-2">{test.weight || '-'} lbs</td>
-                            <td className="px-4 py-2">{test.bmi ? test.bmi.toFixed(1) : '-'}</td>
-                            <td className="px-4 py-2">
-                              <button
-                                onClick={() => {
-                                  setEditingTestId(test.id);
-                                  const student = students.find(s => s.id === test.studentId);
-                                  if (student && student.classroomTeacher) {
-                                    setSelectedClassroomTeacher(student.classroomTeacher);
-                                  }
-                                  setFormData({
-                                    studentId: test.studentId,
-                                    testDate: test.testDate.split('T')[0],
-                                    testSeason: test.testSeason,
-                                    pacerOrMileRun: test.pacerOrMileRun || undefined,
-                                    pushups: test.pushups || undefined,
-                                    situps: test.situps || undefined,
-                                    sitAndReach: test.sitAndReach || undefined,
-                                    shoulderStretchRight: test.shoulderStretchRight || undefined,
-                                    shoulderStretchLeft: test.shoulderStretchLeft || undefined,
-                                    height: test.height || undefined,
-                                    weight: test.weight || undefined,
-                                    trunkLift: test.trunkLift || undefined,
-                                    notes: test.notes || undefined,
-                                  });
-                                  setActiveTab('enter');
-                                }}
-                                className="text-blue-600 hover:text-blue-800 font-medium"
-                              >
-                                Edit
-                              </button>
-                            </td>
-                          </tr>
+                          <>
+                            <tr key={test.id} className="border-t border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-2">{test.student.firstName} {test.student.lastName}</td>
+                              <td className="px-4 py-2">{test.student.classroomTeacher || '-'}</td>
+                              <td className="px-4 py-2">{test.student.districtId}</td>
+                              <td className="px-4 py-2">{test.student.currentGrade}</td>
+                              <td className="px-4 py-2">{new Date(test.testDate).toLocaleDateString()}</td>
+                              <td className="px-4 py-2">{test.testSeason}</td>
+                              <td className="px-4 py-2">{test.pacerOrMileRun ?? '-'}</td>
+                              <td className="px-4 py-2">{test.height || '-'} in</td>
+                              <td className="px-4 py-2">{test.weight || '-'} lbs</td>
+                              <td className="px-4 py-2">{test.bmi ? test.bmi.toFixed(1) : '-'}</td>
+                              <td className="px-4 py-2">
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedClassroomTeacher(test.student.classroomTeacher || '');
+                                      setFormData({
+                                        studentId: test.studentId,
+                                        testDate: test.testDate.split('T')[0],
+                                        testSeason: test.testSeason,
+                                        pacerOrMileRun: test.pacerOrMileRun || undefined,
+                                        pushups: test.pushups || undefined,
+                                        situps: test.situps || undefined,
+                                        sitAndReach: test.sitAndReach || undefined,
+                                        shoulderStretchRight: test.shoulderStretchRight || undefined,
+                                        shoulderStretchLeft: test.shoulderStretchLeft || undefined,
+                                        height: test.height || undefined,
+                                        weight: test.weight || undefined,
+                                        trunkLift: test.trunkLift || undefined,
+                                        notes: test.notes || undefined,
+                                      });
+                                      setActiveTab('enter');
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => setExpandedTestId(expandedTestId === test.id ? null : test.id)}
+                                    className="text-gray-600 hover:text-gray-900 font-medium"
+                                  >
+                                    {expandedTestId === test.id ? 'Hide' : 'Details'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {expandedTestId === test.id && (
+                              <tr className="border-t border-gray-200 bg-gray-50">
+                                <td colSpan={11} className="px-4 py-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-gray-500">Pacer/Mile</p>
+                                      <p className="font-medium text-gray-900">{test.pacerOrMileRun ?? '-'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Push-ups</p>
+                                      <p className="font-medium text-gray-900">{test.pushups ?? '-'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Sit-ups</p>
+                                      <p className="font-medium text-gray-900">{test.situps ?? '-'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Sit & Reach</p>
+                                      <p className="font-medium text-gray-900">{test.sitAndReach ?? '-'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Trunk Lift</p>
+                                      <p className="font-medium text-gray-900">{test.trunkLift ?? '-'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Shoulder Stretch</p>
+                                      <p className="font-medium text-gray-900">
+                                        R: {test.shoulderStretchRight ? 'Pass' : 'Fail'} | L: {test.shoulderStretchLeft ? 'Pass' : 'Fail'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Height</p>
+                                      <p className="font-medium text-gray-900">{test.height || '-'} in</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">Weight</p>
+                                      <p className="font-medium text-gray-900">{test.weight || '-'} lbs</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-gray-500">BMI</p>
+                                      <p className="font-medium text-gray-900">{test.bmi ? test.bmi.toFixed(1) : '-'}</p>
+                                    </div>
+                                    {test.notes && (
+                                      <div className="md:col-span-3">
+                                        <p className="text-gray-500">Notes</p>
+                                        <p className="font-medium text-gray-900">{test.notes}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
                         ))}
                     </tbody>
                   </table>
@@ -738,6 +969,26 @@ export default function TeacherAssessmentPage() {
               <p className="text-gray-600">No students found.</p>
             ) : (
               <div>
+                {/* Grade Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Grade Level
+                  </label>
+                  <select
+                    value={classSummaryGrade}
+                    onChange={(e) => {
+                      setClassSummaryGrade(e.target.value);
+                      setClassSummaryTeacher('');
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Grades</option>
+                    {classSummaryGrades.map(grade => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Classroom Teacher Filter */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -747,22 +998,23 @@ export default function TeacherAssessmentPage() {
                     value={classSummaryTeacher}
                     onChange={(e) => setClassSummaryTeacher(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    disabled={!classSummaryGrade}
                   >
                     <option value="">All Classroom Teachers</option>
-                    {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
+                    {Array.from(new Set(classSummaryFilteredStudents.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map(teacher => (
                       <option key={teacher} value={teacher}>{teacher}</option>
                     ))}
                   </select>
                 </div>
 
                 <div className="space-y-6">
-                  {Array.from(new Set(students.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map((teacher) => {
+                  {Array.from(new Set(classSummaryFilteredStudents.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map((teacher) => {
                     // Skip if filtering and teacher doesn't match
                     if (classSummaryTeacher && teacher !== classSummaryTeacher) {
                       return null;
                     }
 
-                    const classStudents = students.filter(s => s.classroomTeacher === teacher);
+                    const classStudents = classSummaryFilteredStudents.filter(s => s.classroomTeacher === teacher);
                     const completedCount = tests.filter(t => classStudents.some(cs => cs.id === t.studentId)).length;
                     
                     return (
@@ -791,7 +1043,7 @@ export default function TeacherAssessmentPage() {
                                 </span>
                                 {studentTest ? (
                                   <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
-                                    ✓ {new Date(studentTest.testDate).toLocaleDateString()}
+                                    ✓ {new Date(studentTest.testDate).toLocaleDateString()} • Pacer: {studentTest.pacerOrMileRun ?? '-'}
                                   </span>
                                 ) : (
                                   <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
@@ -826,7 +1078,6 @@ export default function TeacherAssessmentPage() {
             )}
           </div>
         )}
-      </main>
     </div>
   );
 }

@@ -10,10 +10,22 @@ export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies();
     const teacherSession = cookieStore.get("teacher_session")?.value;
+    const adminSession = cookieStore.get("admin_session")?.value;
+    const tempEmail = cookieStore.get("temp_teacher_email")?.value;
+
+    // Check for admin session first
+    if (adminSession === "true") {
+      return NextResponse.json({
+        success: true,
+        admin: {
+          id: "admin",
+          username: "Administrator",
+        },
+      });
+    }
 
     if (!teacherSession) {
       // Check for temp email during profile setup
-      const tempEmail = cookieStore.get("temp_teacher_email")?.value;
       if (tempEmail) {
         return NextResponse.json({
           success: true,
@@ -27,6 +39,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Teacher has full session - return teacher info but NOT in setup mode
+    // (profile setup page should only be accessible via temp cookies)
 
     // Get teacher from database
     const teacher = await prisma.teacher.findUnique({

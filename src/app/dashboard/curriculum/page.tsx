@@ -79,32 +79,8 @@ export default function CurriculumLibrary() {
   const units = [...new Set(resources.map((r) => r.unit).filter(Boolean))];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-          <Link href="/dashboard" className="text-2xl font-bold text-gray-900">
-            ← Dashboard
-          </Link>
-          <div className="flex items-center gap-3">
-            <Image
-              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
-              alt="Move Across the Prairie logo"
-              width={72}
-              height={72}
-              className="h-12 sm:h-[72px] w-auto"
-              priority
-            />
-            <h1 className="text-2xl font-bold text-gray-900">
-              Curriculum Library
-            </h1>
-          </div>
-          <div className="w-0 sm:w-20"></div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12">
+    <div>
+      <div className="max-w-7xl mx-auto px-4 py-12">
         {/* Search */}
         <div className="mb-8">
           <input
@@ -248,7 +224,7 @@ export default function CurriculumLibrary() {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

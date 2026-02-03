@@ -8,7 +8,7 @@ import { cookies } from "next/headers";
  * Import students from CSV file
  * 
  * CSV Format (required columns):
- * districtId, firstName, lastName, dateOfBirth (YYYY-MM-DD), grade (3-12), school, peTeacher
+ * districtId, firstName, lastName, sex (M/F), dateOfBirth (YYYY-MM-DD), grade (3-12), school, peTeacher
  */
 export async function POST(request: NextRequest) {
   try {
@@ -69,9 +69,9 @@ export async function POST(request: NextRequest) {
 
       try {
         // Validate required fields
-        const { districtId, firstName, lastName, dateOfBirth, grade, school, peTeacher, classroomTeacher } = row;
+        const { districtId, firstName, lastName, sex, dateOfBirth, grade, school, peTeacher, classroomTeacher } = row;
 
-        if (!districtId || !firstName || !lastName || !dateOfBirth || !grade || !school || !peTeacher) {
+        if (!districtId || !firstName || !lastName || !sex || !dateOfBirth || !grade || !school || !peTeacher) {
           results.errors.push({
             row: rowNumber,
             districtId: districtId || "MISSING",
@@ -88,6 +88,18 @@ export async function POST(request: NextRequest) {
             row: rowNumber,
             districtId,
             error: "Grade must be between 3 and 12",
+          });
+          results.skipped++;
+          continue;
+        }
+
+        // Validate sex
+        const normalizedSex = String(sex).trim().toUpperCase();
+        if (normalizedSex !== "M" && normalizedSex !== "F") {
+          results.errors.push({
+            row: rowNumber,
+            districtId,
+            error: "Sex must be M or F",
           });
           results.skipped++;
           continue;
@@ -117,6 +129,7 @@ export async function POST(request: NextRequest) {
             data: {
               firstName,
               lastName,
+              sex: normalizedSex,
               dateOfBirth: dob,
               currentGrade: gradeNum,
               currentSchool: school,
@@ -132,6 +145,7 @@ export async function POST(request: NextRequest) {
               districtId,
               firstName,
               lastName,
+              sex: normalizedSex,
               dateOfBirth: dob,
               currentGrade: gradeNum,
               currentSchool: school,
@@ -185,7 +199,7 @@ export async function POST(request: NextRequest) {
  * GET /api/admin/import-students
  * Returns CSV template for students
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verify admin authentication
     const cookieStore = await cookies();
@@ -198,10 +212,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const csvTemplate = `districtId,firstName,lastName,dateOfBirth,grade,school,peTeacher
-STU001,John,Doe,2010-05-15,6,Central Elementary,Ms. Smith
-STU002,Jane,Smith,2009-08-22,7,Central Elementary,Mr. Johnson
-STU003,Bob,Johnson,2008-03-10,8,Lincoln Middle School,Ms. Garcia`;
+    const csvTemplate = `districtId,firstName,lastName,sex,dateOfBirth,grade,school,peTeacher
+  STU001,John,Doe,M,2010-05-15,6,Central Elementary,Ms. Smith
+  STU002,Jane,Smith,F,2009-08-22,7,Central Elementary,Mr. Johnson
+  STU003,Bob,Johnson,M,2008-03-10,8,Lincoln Middle School,Ms. Garcia`;
 
     return new NextResponse(csvTemplate, {
       headers: {

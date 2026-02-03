@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function TeacherSignIn() {
   const router = useRouter();
@@ -113,21 +114,35 @@ export default function TeacherSignIn() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-blue-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">
-          Teacher Portal
-        </h1>
-        <p className="text-center text-gray-600 mb-8">
-          Sign in with your GPISD email
-        </p>
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-block">
+            <Image
+              src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
+              alt="Move Across the Prairie"
+              width={400}
+              height={400}
+              className="mx-auto"
+              priority
+            />
+          </Link>
+          <h1 className="text-3xl font-bold text-gray-900 -mt-10 mb-2">
+            Teacher Portal
+          </h1>
+          <p className="text-gray-600">
+            Sign in with your GPISD email
+          </p>
+        </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSignIn} className="space-y-6">
+          <form onSubmit={handleSignIn} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
@@ -246,20 +261,25 @@ export default function TeacherSignIn() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           )}
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
-            Administrator?{" "}
-            <Link href="/auth/admin" className="text-blue-600 hover:text-blue-800 font-medium">
-              Admin Portal
-            </Link>
-          </p>
+        <div className="mt-6 text-center text-sm text-gray-600">
+          Administrator?{" "}
+          <Link href="/auth/admin" className="text-blue-600 hover:text-blue-800 font-medium">
+            Admin Portal
+          </Link>
+        </div>
+
+        <div className="mt-4 text-center">
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
+            ← Back to Home
+          </Link>
+        </div>
         </div>
       </div>
     </div>
