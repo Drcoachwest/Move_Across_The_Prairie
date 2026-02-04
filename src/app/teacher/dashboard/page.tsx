@@ -59,7 +59,10 @@ export default function TeacherDashboard() {
         </Link>
 
         {/* Reports Card */}
-        <div className="bg-white p-6 rounded-lg shadow">
+        <Link
+          href="/teacher/dashboard/reports"
+          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition"
+        >
           <div className="flex items-center mb-4">
             <div className="text-4xl mr-4">📊</div>
             <h3 className="text-lg font-semibold text-gray-900">
@@ -67,9 +70,25 @@ export default function TeacherDashboard() {
             </h3>
           </div>
           <p className="text-gray-600">
-            View student progress reports (Coming Soon)
+            View fitness data analytics and export reports
           </p>
-        </div>
+        </Link>
+
+        {/* PACER Improvement Tracker Card */}
+        <Link
+          href="/teacher/dashboard/pacer-comparison"
+          className="bg-white p-6 rounded-lg shadow hover:shadow-md transition"
+        >
+          <div className="flex items-center mb-4">
+            <div className="text-4xl mr-4">📈</div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              PACER Improvement Tracker
+            </h3>
+          </div>
+          <p className="text-gray-600">
+            Compare Fall vs Spring performance and track student growth
+          </p>
+        </Link>
       </div>
     </div>
   );

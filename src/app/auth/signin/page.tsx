@@ -4,7 +4,7 @@
 // This can be deleted once confirmed it's not referenced anywhere
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 
 export default function SignIn() {
@@ -111,9 +111,10 @@ export default function SignIn() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-md p-8">
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-gray-50">Loading...</div>}>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-md p-8">
           <div className="flex flex-col items-center text-center mb-6">
             <Image
               src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
@@ -217,5 +218,6 @@ export default function SignIn() {
         </div>
       </div>
     </div>
+    </Suspense>
   );
 }

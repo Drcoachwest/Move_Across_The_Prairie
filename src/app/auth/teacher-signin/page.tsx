@@ -243,10 +243,11 @@ export default function TeacherSignIn() {
 
           {emailChecked && hasPassword === true && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                 Password
               </label>
               <input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -254,6 +255,11 @@ export default function TeacherSignIn() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
+              <div className="mt-2 text-right">
+                <Link href="/auth/forgot-password" className="text-sm text-blue-600 hover:text-blue-800 underline">
+                  Forgot Password?
+                </Link>
+              </div>
             </div>
           )}
 

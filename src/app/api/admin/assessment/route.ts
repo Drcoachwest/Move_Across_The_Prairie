@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       testDate,
       testSeason,
       testYear,
+      cardioTestType,
       pacerOrMileRun,
       pushups,
       situps,
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
         where: { id: existingTest.id },
         data: {
           testDate: new Date(testDate),
+          cardioTestType: cardioTestType || "PACER",
           pacerOrMileRun: pacerOrMileRun || null,
           pushups: pushups || null,
           situps: situps || null,
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
           testDate: new Date(testDate),
           testSeason: testSeason as "Fall" | "Spring",
           testYear,
+          cardioTestType: cardioTestType || "PACER",
           pacerOrMileRun: pacerOrMileRun || null,
           pushups: pushups || null,
           situps: situps || null,

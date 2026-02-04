@@ -47,6 +47,8 @@ model Teacher {
   activatedAt DateTime?
   activationCodeUsed String? // code that was used to activate
   locked    Boolean    @default(false) // Temporary account restriction
+  resetToken String?    // Token for password reset
+  resetTokenExpiresAt DateTime? // Expiration time for reset token
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   
@@ -168,6 +170,7 @@ model FitnesGramTest {
   testYear          Int        // 2024, 2025, etc.
   
   // Test Metrics
+  cardioTestType    String     @default("PACER")
   pacerOrMileRun    Float?     // PACER laps or mile time in minutes
   pushups           Int?
   situps            Int?

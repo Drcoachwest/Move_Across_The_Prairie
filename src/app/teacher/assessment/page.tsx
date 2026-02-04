@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import standards from '@/lib/fitnessgram-standards.json';
 
@@ -21,6 +21,7 @@ interface FormData {
   studentId: string;
   testDate: string;
   testSeason: 'Fall' | 'Spring';
+  cardioTestType: 'PACER' | 'MILE';
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -39,6 +40,7 @@ interface TestData {
   testDate: string;
   testSeason: 'Fall' | 'Spring';
   testYear: number;
+  cardioTestType?: 'PACER' | 'MILE';
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -97,10 +99,12 @@ export default function TeacherAssessmentPage() {
   const [classSummaryGrade, setClassSummaryGrade] = useState<string>('');
   const [viewTestsTeacher, setViewTestsTeacher] = useState<string>('');
   const [viewTestsGrade, setViewTestsGrade] = useState<string>('');
+  const [viewTestsSeason, setViewTestsSeason] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
     testSeason: 'Fall',
+    cardioTestType: 'PACER',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -116,15 +120,15 @@ export default function TeacherAssessmentPage() {
             setLoading(false);
           } else {
             // No teacher in session, redirect to login
-            window.location.href = '/auth/signin';
+            window.location.href = '/auth/teacher-signin';
           }
         } else {
           // Not authenticated, redirect to login
-          window.location.href = '/auth/signin';
+          window.location.href = '/auth/teacher-signin';
         }
       } catch (err) {
         console.error('Failed to get teacher info:', err);
-        window.location.href = '/auth/signin';
+        window.location.href = '/auth/teacher-signin';
       }
     };
     getTeacherInfo();
@@ -184,6 +188,7 @@ export default function TeacherAssessmentPage() {
           studentId: value,
           testDate: formattedTestDate,
           testSeason: existingTest.testSeason,
+          cardioTestType: existingTest.cardioTestType || 'PACER',
           pacerOrMileRun: existingTest.pacerOrMileRun,
           pushups: existingTest.pushups,
           situps: existingTest.situps,
@@ -202,14 +207,33 @@ export default function TeacherAssessmentPage() {
           studentId: value,
           testDate: new Date().toISOString().split('T')[0],
           testSeason: formData.testSeason,
+          cardioTestType: formData.cardioTestType,
         });
         return;
       }
     }
 
+    const numericValue = type === 'number' ? (value ? Number(value) : undefined) : undefined;
+    
+    // For pacerOrMileRun: round if PACER, keep decimal if Mile Run
+    // For all other numeric fields: round to whole numbers
+    let normalizedValue: string | number | undefined = value;
+    
+    if (type === 'number') {
+      if (numericValue === undefined) {
+        normalizedValue = undefined;
+      } else if (name === 'pacerOrMileRun') {
+        // Only round PACER laps, not Mile Run times (Mile needs decimals like 9.8 for 9:48)
+        normalizedValue = formData.cardioTestType === 'PACER' ? Math.round(numericValue) : numericValue;
+      } else {
+        // All other numeric fields: round to whole numbers
+        normalizedValue = Math.round(numericValue);
+      }
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (type === 'number' ? (value ? parseFloat(value) : undefined) : value),
+      [name]: type === 'checkbox' ? checked : normalizedValue,
     }));
   };
 
@@ -231,11 +255,134 @@ export default function TeacherAssessmentPage() {
     return age;
   };
 
+  const isPacer = formData.cardioTestType === 'PACER';
+
+  // Convert decimal minutes to min/sec display
+  const mileMinutes = !isPacer && formData.pacerOrMileRun !== undefined
+    ? Math.floor(formData.pacerOrMileRun)
+    : '';
+  const mileSeconds = !isPacer && formData.pacerOrMileRun !== undefined
+    ? Math.min(59, Math.max(0, Math.round((formData.pacerOrMileRun - Math.floor(formData.pacerOrMileRun)) * 60)))
+    : '';
+
+  const handleMileTimeChange = (minutes: number | '', seconds: number | '') => {
+    if (minutes === '' && seconds === '') {
+      setFormData(prev => ({ ...prev, pacerOrMileRun: undefined }));
+      return;
+    }
+    const safeMinutes = minutes === '' ? 0 : Math.floor(Number(minutes));
+    const safeSeconds = seconds === '' ? 0 : Math.floor(Number(seconds));
+    const normalizedSeconds = Math.min(59, Math.max(0, safeSeconds));
+    const value = safeMinutes + normalizedSeconds / 60;
+    setFormData(prev => ({ ...prev, pacerOrMileRun: value }));
+  };
+
+  const calculateImprovementStatus = (
+    fallTest: TestData | undefined,
+    springTest: TestData | undefined,
+    student: Student
+  ) => {
+    if (!fallTest || !springTest) {
+      return {
+        status: 'No Data',
+        change: 0,
+        percentChange: 0,
+        reason: 'Missing Fall or Spring test',
+        color: 'text-gray-500'
+      };
+    }
+
+    // Only compare PACER tests (not 1-Mile)
+    if (fallTest.cardioTestType !== 'PACER' || springTest.cardioTestType !== 'PACER') {
+      return {
+        status: 'Not Comparable',
+        change: 0,
+        percentChange: 0,
+        reason: 'Only PACER tests can be compared',
+        color: 'text-gray-500'
+      };
+    }
+
+    const fallValue = fallTest.pacerOrMileRun || 0;
+    const springValue = springTest.pacerOrMileRun || 0;
+    const lapChange = springValue - fallValue;
+    const percentChange = fallValue > 0 ? ((lapChange / fallValue) * 100) : 0;
+
+    // Calculate if moved to HFZ
+    const fallAge = calculateAge(student.dateOfBirth, fallTest.testDate);
+    const springAge = calculateAge(student.dateOfBirth, springTest.testDate);
+    const fallZone = getFitnessZone('pacerOrMileRun', fallValue, fallAge, student.sex, false);
+    const springZone = getFitnessZone('pacerOrMileRun', springValue, springAge, student.sex, false);
+    const movedToHFZ = fallZone?.includes('Needs Improvement') && springZone?.includes('Healthy');
+
+    // Check improvement criteria
+    const hasSignificantIncrease = lapChange >= 5;
+    const hasPercentIncrease = percentChange >= 10;
+    const hasZoneImprovement = movedToHFZ;
+
+    if (hasSignificantIncrease || hasPercentIncrease || hasZoneImprovement) {
+      let reason = '';
+      if (hasSignificantIncrease) reason += `+${lapChange} laps `;
+      if (hasPercentIncrease) reason += `(${percentChange.toFixed(1)}%) `;
+      if (hasZoneImprovement) reason += '(Moved to HFZ) ';
+      
+      return {
+        status: 'Significant Improvement',
+        change: lapChange,
+        percentChange,
+        reason: reason.trim(),
+        color: 'text-green-600 font-semibold'
+      };
+    }
+
+    // Check for "No Clear Change"
+    if (Math.abs(lapChange) < 3 && Math.abs(percentChange) < 10) {
+      return {
+        status: 'No Clear Change',
+        change: lapChange,
+        percentChange,
+        reason: `${lapChange > 0 ? '+' : ''}${lapChange} (${percentChange.toFixed(1)}%)`,
+        color: 'text-gray-600'
+      };
+    }
+
+    // Moderate improvement (3-5 laps and/or 5-10%)
+    if (lapChange > 0) {
+      return {
+        status: 'Moderate Improvement',
+        change: lapChange,
+        percentChange,
+        reason: `+${lapChange} (${percentChange.toFixed(1)}%)`,
+        color: 'text-blue-600 font-medium'
+      };
+    }
+
+    // Declined
+    if (lapChange < 0) {
+      return {
+        status: '⬇️ Declined',
+        change: lapChange,
+        percentChange,
+        reason: `${lapChange} (${percentChange.toFixed(1)}%)`,
+        color: 'text-red-600 font-semibold'
+      };
+    }
+
+    return {
+      status: 'No Change',
+      change: 0,
+      percentChange: 0,
+      reason: 'Same as Fall',
+      color: 'text-gray-500'
+    };
+  };;
+
   const getFitnessZone = (
     component: FitnessComponent,
     value: number | undefined,
     age: number | undefined,
-    sex: string | undefined
+    sex: string | undefined,
+    isOneMilleRun?: boolean
   ) => {
     if (value === undefined || age === undefined || !sex) return undefined;
 
@@ -246,7 +393,9 @@ export default function TeacherAssessmentPage() {
     const ageMuscular = data[sexKey].muscular[ageKey];
 
     let range: StandardsRange | { min?: number } | undefined;
-    if (component === 'pacerOrMileRun') range = ageCardio?.pacer20;
+    if (component === 'pacerOrMileRun') {
+      range = isOneMilleRun ? (ageCardio as any)?.oneMilleRun : ageCardio?.pacer20;
+    }
     if (component === 'bmi') range = ageCardio?.bmi;
     if (component === 'pushups') range = ageMuscular?.pushup90;
     if (component === 'situps') range = ageMuscular?.curlup;
@@ -259,14 +408,33 @@ export default function TeacherAssessmentPage() {
     const max = 'max' in range ? (range as StandardsRange).max : undefined;
 
     if (min !== undefined && max !== undefined) {
-      if (value < min) return 'Zone: Needs Improvement (Low)';
-      if (value > max) return 'Zone: Needs Improvement (High)';
-      return 'Zone: Healthy Fitness Zone';
+      // For 1-mile run, LOWER times are better (inverse of PACER)
+      if (isOneMilleRun) {
+        if (value > max) return 'Zone: Needs Improvement (Slow)';
+        if (value < min) return 'Zone: Needs Improvement (Fast)';
+        return 'Zone: Healthy Fitness Zone';
+      } else {
+        // PACER: higher values are better
+        if (value < min) return 'Zone: Needs Improvement (Low)';
+        if (value > max) return 'Zone: Needs Improvement (High)';
+        return 'Zone: Healthy Fitness Zone';
+      }
+    }
+
+    // BMI only has a max value (no min), lower is better
+    if (component === 'bmi' && max !== undefined && min === undefined) {
+      if (value <= max) return 'Zone: Healthy Fitness Zone';
+      return 'Zone: Needs Improvement (High)';
     }
 
     if (min !== undefined) {
-      if (value < min) return 'Zone: Needs Improvement';
-      return 'Zone: Healthy Fitness Zone';
+      if (isOneMilleRun) {
+        if (value > min) return 'Zone: Healthy Fitness Zone';
+        return 'Zone: Needs Improvement';
+      } else {
+        if (value < min) return 'Zone: Needs Improvement';
+        return 'Zone: Healthy Fitness Zone';
+      }
     }
 
     return 'Zone: No standard';
@@ -309,6 +477,7 @@ export default function TeacherAssessmentPage() {
         studentId: '',
         testDate: new Date().toISOString().split('T')[0],
         testSeason: formData.testSeason,
+        cardioTestType: formData.cardioTestType,
       });
       
       // Show success message for 2 seconds
@@ -346,9 +515,13 @@ export default function TeacherAssessmentPage() {
   );
 
   const viewTestsGrades = Array.from(new Set(viewableTests.map(t => t.student.currentGrade))).sort((a, b) => a - b);
+  const viewTestsSeasons = Array.from(new Set(viewableTests.map(t => t.testSeason))).sort();
   const viewGradeFilteredTests = viewTestsGrade
     ? viewableTests.filter(t => t.student.currentGrade === Number(viewTestsGrade))
     : viewableTests;
+  const viewGradeAndSeasonFilteredTests = viewTestsSeason
+    ? viewGradeFilteredTests.filter(t => t.testSeason === viewTestsSeason)
+    : viewGradeFilteredTests;
 
   const classSummaryGrades = Array.from(new Set(students.map(s => s.currentGrade))).sort((a, b) => a - b);
   const classSummaryFilteredStudents = classSummaryGrade
@@ -547,29 +720,125 @@ export default function TeacherAssessmentPage() {
                 )}
 
                 {/* Test Metrics */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Test Metrics</h3>
+                <div className="border-t pt-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Test Metrics</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        PACER / 1-Mile Run (laps or minutes)
+                        Cardio Test
                       </label>
-                      <input
-                        type="number"
-                        name="pacerOrMileRun"
-                        step="0.1"
-                        value={formData.pacerOrMileRun || ''}
-                        onChange={handleFormChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className={`text-xs font-medium mt-1 ${
-                        getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                      }`}>
-                        {getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                      <div className="grid grid-cols-2 gap-1 rounded-lg border border-gray-300 bg-gray-50 p-1 w-full">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData(prev => ({
+                              ...prev,
+                              cardioTestType: 'PACER',
+                              pacerOrMileRun: prev.cardioTestType === 'PACER' ? prev.pacerOrMileRun : undefined,
+                            }))
+                          }
+                          className={`px-3 py-2 text-sm font-medium rounded-md transition ${
+                            isPacer ? 'bg-white text-blue-700 shadow' : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                          aria-pressed={isPacer}
+                        >
+                          🏃‍♂️ PACER
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData(prev => ({
+                              ...prev,
+                              cardioTestType: 'MILE',
+                              pacerOrMileRun: prev.cardioTestType === 'MILE' ? prev.pacerOrMileRun : undefined,
+                            }))
+                          }
+                          className={`px-3 py-2 text-sm font-medium rounded-md transition ${
+                            !isPacer ? 'bg-white text-blue-700 shadow' : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                          aria-pressed={!isPacer}
+                        >
+                          ⏱ 1-Mile
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {isPacer ? 'Enter PACER laps completed.' : 'Enter time in minutes and seconds.'}
                       </p>
+                      {isPacer ? (
+                        <>
+                          <label className="block text-sm font-medium text-gray-700 mt-2 mb-1">
+                            PACER (laps)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              name="pacerOrMileRun"
+                              step={1}
+                              min={0}
+                              placeholder="e.g., 25"
+                              value={formData.pacerOrMileRun || ''}
+                              onChange={handleFormChange}
+                              className="w-full pr-16 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <span className="absolute inset-y-0 right-3 flex items-center text-xs text-gray-500">
+                              laps
+                            </span>
+                          </div>
+                          <p className={`text-xs font-medium mt-1 ${
+                            getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                              ? 'text-green-600' 
+                              : 'text-red-600'
+                          }`}>
+                            {getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex) || 'Zone: —'}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <label className="block text-sm font-medium text-gray-700 mt-2 mb-1">
+                            1-Mile Run Time
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs text-gray-600 block mb-1">Minutes</label>
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="e.g., 9"
+                                value={mileMinutes}
+                                onChange={(e) => {
+                                  const min = e.target.value === '' ? '' : parseInt(e.target.value, 10) || '';
+                                  handleMileTimeChange(min, mileSeconds);
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-600 block mb-1">Seconds</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={59}
+                                placeholder="e.g., 48"
+                                value={mileSeconds}
+                                onChange={(e) => {
+                                  const min = formData.pacerOrMileRun !== undefined ? Math.floor(formData.pacerOrMileRun) : '';
+                                  const sec = e.target.value === '' ? '' : Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0));
+                                  handleMileTimeChange(min, sec);
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                          <p className={`text-xs font-medium mt-1 ${
+                            getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex, true)?.includes('Healthy') 
+                              ? 'text-green-600' 
+                              : 'text-red-600'
+                          }`}>
+                            {getFitnessZone('pacerOrMileRun', formData.pacerOrMileRun, selectedStudentAge, selectedStudent?.sex, true) || 'Zone: —'}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     <div>
@@ -614,12 +883,11 @@ export default function TeacherAssessmentPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Sit and Reach (cm)
+                        Sit and Reach (inches)
                       </label>
                       <input
                         type="number"
                         name="sitAndReach"
-                        step="0.5"
                         value={formData.sitAndReach || ''}
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -640,7 +908,6 @@ export default function TeacherAssessmentPage() {
                       <input
                         type="number"
                         name="height"
-                        step="0.1"
                         value={formData.height || ''}
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -654,18 +921,10 @@ export default function TeacherAssessmentPage() {
                       <input
                         type="number"
                         name="weight"
-                        step="0.1"
                         value={formData.weight || ''}
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
-                      <p className={`text-xs font-medium mt-1 ${
-                        getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                      }`}>
-                        {getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex) || 'BMI Zone: —'}
-                      </p>
                     </div>
 
                     <div>
@@ -675,7 +934,6 @@ export default function TeacherAssessmentPage() {
                       <input
                         type="number"
                         name="trunkLift"
-                        step="0.5"
                         value={formData.trunkLift || ''}
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -725,6 +983,13 @@ export default function TeacherAssessmentPage() {
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-sm font-medium text-gray-900">
                         Calculated BMI: {calculateBMI(formData.height, formData.weight)?.toFixed(1)}
+                      </p>
+                      <p className={`text-xs font-medium mt-1 ${
+                        getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex)?.includes('Healthy') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
+                      }`}>
+                        {getFitnessZone('bmi', currentBMI, selectedStudentAge, selectedStudent?.sex) || 'BMI Zone: —'}
                       </p>
                     </div>
                   )}
@@ -796,6 +1061,23 @@ export default function TeacherAssessmentPage() {
                   </select>
                 </div>
 
+                {/* Season Filter */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Test Season
+                  </label>
+                  <select
+                    value={viewTestsSeason}
+                    onChange={(e) => setViewTestsSeason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Seasons</option>
+                    {viewTestsSeasons.map(season => (
+                      <option key={season} value={season}>{season}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Classroom Teacher Filter */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -832,11 +1114,11 @@ export default function TeacherAssessmentPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {viewGradeFilteredTests
+                      {viewGradeAndSeasonFilteredTests
                         .filter(test => !viewTestsTeacher || test.student.classroomTeacher === viewTestsTeacher)
                         .map((test) => (
-                          <>
-                            <tr key={test.id} className="border-t border-gray-200 hover:bg-gray-50">
+                          <React.Fragment key={test.id}>
+                            <tr className="border-t border-gray-200 hover:bg-gray-50">
                               <td className="px-4 py-2">{test.student.firstName} {test.student.lastName}</td>
                               <td className="px-4 py-2">{test.student.classroomTeacher || '-'}</td>
                               <td className="px-4 py-2">{test.student.districtId}</td>
@@ -934,7 +1216,7 @@ export default function TeacherAssessmentPage() {
                                 </td>
                               </tr>
                             )}
-                          </>
+                          </React.Fragment>
                         ))}
                     </tbody>
                   </table>
@@ -963,7 +1245,7 @@ export default function TeacherAssessmentPage() {
         {/* Class Summary Tab */}
         {activeTab === 'class-summary' && (
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold mb-6">Class Summary</h2>
+            <h2 className="text-2xl font-bold mb-6">Class Summary - Fall vs Spring Comparison</h2>
             
             {students.length === 0 ? (
               <p className="text-gray-600">No students found.</p>
@@ -1007,7 +1289,7 @@ export default function TeacherAssessmentPage() {
                   </select>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-8">
                   {Array.from(new Set(classSummaryFilteredStudents.filter(s => s.classroomTeacher).map(s => s.classroomTeacher))).sort().map((teacher) => {
                     // Skip if filtering and teacher doesn't match
                     if (classSummaryTeacher && teacher !== classSummaryTeacher) {
@@ -1015,44 +1297,109 @@ export default function TeacherAssessmentPage() {
                     }
 
                     const classStudents = classSummaryFilteredStudents.filter(s => s.classroomTeacher === teacher);
-                    const completedCount = tests.filter(t => classStudents.some(cs => cs.id === t.studentId)).length;
+                    const fallTests = new Map();
+                    const springTests = new Map();
+                    
+                    // Organize tests by student and season
+                    tests.forEach(test => {
+                      if (classStudents.some(cs => cs.id === test.studentId)) {
+                        if (test.testSeason === 'Fall') {
+                          fallTests.set(test.studentId, test);
+                        } else if (test.testSeason === 'Spring') {
+                          springTests.set(test.studentId, test);
+                        }
+                      }
+                    });
+
+                    const completedFall = fallTests.size;
+                    const completedSpring = springTests.size;
                     
                     return (
-                      <div key={teacher} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="flex justify-between items-center mb-4">
+                      <div key={teacher} className="border rounded-lg overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 p-4">
                           <h3 className="text-lg font-semibold text-gray-900">{teacher}</h3>
-                          <span className="text-sm font-medium text-gray-600">
-                            {completedCount} of {classStudents.length} tests completed
-                          </span>
-                        </div>
-                        
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-all"
-                            style={{ width: `${classStudents.length > 0 ? (completedCount / classStudents.length) * 100 : 0}%` }}
-                          ></div>
+                          <div className="flex gap-6 mt-2 text-sm text-gray-600">
+                            <span>Fall Tests: {completedFall}/{classStudents.length}</span>
+                            <span>Spring Tests: {completedSpring}/{classStudents.length}</span>
+                          </div>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {classStudents.map((student) => {
-                            const studentTest = tests.find(t => t.studentId === student.id);
-                            return (
-                              <div key={student.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
-                                <span className="text-sm font-medium text-gray-900">
-                                  {student.firstName} {student.lastName}
-                                </span>
-                                {studentTest ? (
-                                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
-                                    ✓ {new Date(studentTest.testDate).toLocaleDateString()} • Pacer: {studentTest.pacerOrMileRun ?? '-'}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                    Pending
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                              <tr>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-700">Student</th>
+                                <th colSpan={2} className="px-4 py-3 text-center font-semibold text-gray-700 border-l border-gray-200">Fall Test</th>
+                                <th colSpan={2} className="px-4 py-3 text-center font-semibold text-gray-700 border-l border-gray-200">Spring Test</th>
+                                <th className="px-4 py-3 text-center font-semibold text-gray-700 border-l border-gray-200">Change</th>
+                              </tr>
+                              <tr className="bg-gray-50 border-b border-gray-200">
+                                <th className="px-4 py-2 text-left text-xs text-gray-600"></th>
+                                <th className="px-4 py-2 text-center text-xs text-gray-600 border-l border-gray-200">Pacer/Mile</th>
+                                <th className="px-4 py-2 text-center text-xs text-gray-600">BMI</th>
+                                <th className="px-4 py-2 text-center text-xs text-gray-600 border-l border-gray-200">Pacer/Mile</th>
+                                <th className="px-4 py-2 text-center text-xs text-gray-600">BMI</th>
+                                <th className="px-4 py-2 text-center text-xs text-gray-600 border-l border-gray-200">Pacer</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {classStudents.map((student) => {
+                                const fallTest = fallTests.get(student.id);
+                                const springTest = springTests.get(student.id);
+                                const improvement = calculateImprovementStatus(fallTest, springTest, student);
+                                
+                                const rowBgClass = improvement.status.includes('⬇️') ? 'bg-red-50' : '';
+                                
+                                return (
+                                  <tr key={student.id} className={`border-b border-gray-200 hover:bg-gray-50 ${rowBgClass}`}>
+                                    <td className="px-4 py-3 font-medium text-gray-900">
+                                      {student.firstName} {student.lastName}
+                                    </td>
+                                    <td className="px-4 py-3 text-center border-l border-gray-200">
+                                      {fallTest ? (
+                                        <span className="inline-block px-2 py-1 bg-blue-50 text-blue-700 rounded font-medium">
+                                          {fallTest.pacerOrMileRun ?? '—'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">Pending</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {fallTest ? (
+                                        <span className="text-gray-700">
+                                          {fallTest.bmi ? fallTest.bmi.toFixed(1) : '—'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center border-l border-gray-200">
+                                      {springTest ? (
+                                        <span className="inline-block px-2 py-1 bg-green-50 text-green-700 rounded font-medium">
+                                          {springTest.pacerOrMileRun ?? '—'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">Pending</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      {springTest ? (
+                                        <span className="text-gray-700">
+                                          {springTest.bmi ? springTest.bmi.toFixed(1) : '—'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">—</span>
+                                      )}
+                                    </td>
+                                    <td className={`px-4 py-3 text-center border-l border-gray-200 ${improvement.color}`}>
+                                      <div className="font-medium">{improvement.status}</div>
+                                      <div className="text-xs text-gray-600 mt-1">{improvement.reason}</div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     );

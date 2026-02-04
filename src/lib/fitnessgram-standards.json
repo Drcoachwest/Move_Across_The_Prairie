@@ -3,92 +3,146 @@
     "cardio": {
       "10": {
         "pacer20": {
-          "min": 23.0,
-          "max": 61.0
+          "min": 23,
+          "max": 61
         },
         "bmi": {
-          "min": 14.0,
-          "max": 21.0
+          "min": null,
+          "max": 20.0
+        },
+        "oneMilleRun": {
+          "min": 9.0,
+          "max": 11.5,
+          "minDisplay": "9:00",
+          "maxDisplay": "11:30"
         }
       },
       "11": {
         "pacer20": {
-          "min": 23.0,
-          "max": 72.0
+          "min": 23,
+          "max": 72
         },
         "bmi": {
-          "min": 14.3,
-          "max": 21.0
+          "min": null,
+          "max": 20.0
+        },
+        "oneMilleRun": {
+          "min": 8.5,
+          "max": 11.0,
+          "minDisplay": "8:30",
+          "maxDisplay": "11:00"
         }
       },
       "12": {
         "pacer20": {
-          "min": 32.0,
-          "max": 72.0
+          "min": 32,
+          "max": 72
         },
         "bmi": {
-          "min": 14.6,
-          "max": 22.0
+          "min": null,
+          "max": 21.0
+        },
+        "oneMilleRun": {
+          "min": 8.0,
+          "max": 10.5,
+          "minDisplay": "8:00",
+          "maxDisplay": "10:30"
         }
       },
       "13": {
         "pacer20": {
-          "min": 41.0,
-          "max": 83.0
+          "min": 41,
+          "max": 83
         },
         "bmi": {
-          "min": 15.1,
-          "max": 23.0
+          "min": null,
+          "max": 21.0
+        },
+        "oneMilleRun": {
+          "min": 7.5,
+          "max": 10.0,
+          "minDisplay": "7:30",
+          "maxDisplay": "10:00"
         }
       },
       "14": {
         "pacer20": {
-          "min": 41.0,
-          "max": 83.0
+          "min": 41,
+          "max": 83
         },
         "bmi": {
-          "min": 15.6,
-          "max": 24.5
+          "min": null,
+          "max": 22.5
+        },
+        "oneMilleRun": {
+          "min": 7.0,
+          "max": 9.5,
+          "minDisplay": "7:00",
+          "maxDisplay": "9:30"
         }
       },
       "15": {
         "pacer20": {
-          "min": 51.0,
-          "max": 94.0
+          "min": 51,
+          "max": 94
         },
         "bmi": {
-          "min": 16.2,
-          "max": 25.0
+          "min": null,
+          "max": 22.5
+        },
+        "oneMilleRun": {
+          "min": 7.0,
+          "max": 9.0,
+          "minDisplay": "7:00",
+          "maxDisplay": "9:00"
         }
       },
       "16": {
         "pacer20": {
-          "min": 61.0,
-          "max": 94.0
+          "min": 61,
+          "max": 94
         },
         "bmi": {
-          "min": 16.6,
-          "max": 26.5
+          "min": null,
+          "max": 23.5
+        },
+        "oneMilleRun": {
+          "min": 7.0,
+          "max": 8.5,
+          "minDisplay": "7:00",
+          "maxDisplay": "8:30"
         }
       },
       "17": {
         "pacer20": {
-          "min": 61.0,
-          "max": 106.0
+          "min": 61,
+          "max": 106
         },
         "bmi": {
-          "min": 17.3,
-          "max": 27.0
+          "min": null,
+          "max": 23.5
+        },
+        "oneMilleRun": {
+          "min": 7.0,
+          "max": 8.5,
+          "minDisplay": "7:00",
+          "maxDisplay": "8:30"
         }
       },
       "17+": {
         "pacer20": {
-          "min": 72.0,
-          "max": 106.0
+          "min": 72,
+          "max": 106
         },
         "bmi": {
-          "min": 17.8,
-          "max": 27.8
+          "min": null,
+          "max": 23.5
+        },
+        "oneMilleRun": {
+          "min": 7.0,
+          "max": 8.5,
+          "minDisplay": "7:00",
+          "maxDisplay": "8:30"
         }
       }
     },
@@ -337,92 +391,146 @@
     "cardio": {
       "10": {
         "pacer20": {
-          "min": 7.0,
-          "max": 41.0
+          "min": 7,
+          "max": 41
         },
         "bmi": {
-          "min": 13.7,
-          "max": 23.5
+          "min": null,
+          "max": 20.5
+        },
+        "oneMilleRun": {
+          "min": 9.5,
+          "max": 12.5,
+          "minDisplay": "9:30",
+          "maxDisplay": "12:30"
         }
       },
       "11": {
         "pacer20": {
-          "min": 15.0,
-          "max": 41.0
+          "min": 15,
+          "max": 41
         },
         "bmi": {
-          "min": 14.0,
-          "max": 24.0
+          "min": null,
+          "max": 20.5
+        },
+        "oneMilleRun": {
+          "min": 9.0,
+          "max": 12.0,
+          "minDisplay": "9:00",
+          "maxDisplay": "12:00"
         }
       },
       "12": {
         "pacer20": {
-          "min": 15.0,
-          "max": 41.0
+          "min": 15,
+          "max": 41
         },
         "bmi": {
-          "min": 14.5,
-          "max": 24.5
+          "min": null,
+          "max": 21.5
+        },
+        "oneMilleRun": {
+          "min": 9.0,
+          "max": 12.0,
+          "minDisplay": "9:00",
+          "maxDisplay": "12:00"
         }
       },
       "13": {
         "pacer20": {
-          "min": 23.0,
-          "max": 51.0
+          "min": 23,
+          "max": 51
         },
         "bmi": {
-          "min": 14.9,
-          "max": 24.5
+          "min": null,
+          "max": 21.5
+        },
+        "oneMilleRun": {
+          "min": 9.0,
+          "max": 11.5,
+          "minDisplay": "9:00",
+          "maxDisplay": "11:30"
         }
       },
       "14": {
         "pacer20": {
-          "min": 23.0,
-          "max": 51.0
+          "min": 23,
+          "max": 51
         },
         "bmi": {
-          "min": 15.4,
-          "max": 25.0
+          "min": null,
+          "max": 23.0
+        },
+        "oneMilleRun": {
+          "min": 8.5,
+          "max": 11.0,
+          "minDisplay": "8:30",
+          "maxDisplay": "11:00"
         }
       },
       "15": {
         "pacer20": {
-          "min": 32.0,
-          "max": 51.0
+          "min": 32,
+          "max": 51
         },
         "bmi": {
-          "min": 16.0,
-          "max": 25.0
+          "min": null,
+          "max": 23.0
+        },
+        "oneMilleRun": {
+          "min": 8.0,
+          "max": 10.5,
+          "minDisplay": "8:00",
+          "maxDisplay": "10:30"
         }
       },
       "16": {
         "pacer20": {
-          "min": 32.0,
-          "max": 61.0
+          "min": 32,
+          "max": 61
         },
         "bmi": {
-          "min": 16.4,
-          "max": 25.0
+          "min": null,
+          "max": 24.0
+        },
+        "oneMilleRun": {
+          "min": 8.0,
+          "max": 10.0,
+          "minDisplay": "8:00",
+          "maxDisplay": "10:00"
         }
       },
       "17": {
         "pacer20": {
-          "min": 41.0,
-          "max": 61.0
+          "min": 41,
+          "max": 61
         },
         "bmi": {
-          "min": 16.8,
-          "max": 26.0
+          "min": null,
+          "max": 24.0
+        },
+        "oneMilleRun": {
+          "min": 8.0,
+          "max": 10.0,
+          "minDisplay": "8:00",
+          "maxDisplay": "10:00"
         }
       },
       "17+": {
         "pacer20": {
-          "min": 41.0,
-          "max": 72.0
+          "min": 41,
+          "max": 72
         },
         "bmi": {
-          "min": 17.2,
-          "max": 27.3
+          "min": null,
+          "max": 24.0
+        },
+        "oneMilleRun": {
+          "min": 8.0,
+          "max": 10.0,
+          "minDisplay": "8:00",
+          "maxDisplay": "10:00"
         }
       }
     },
