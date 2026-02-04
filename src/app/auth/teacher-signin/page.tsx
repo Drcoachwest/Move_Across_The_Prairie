@@ -98,8 +98,11 @@ export default function TeacherSignIn() {
         return;
       }
 
-      // If teacher doesn't have a profile set up, redirect to profile setup
-      if (data.needsProfile) {
+      // If teacher needs to complete school level setup, redirect to setup
+      if (data.needsSetup) {
+        router.push("/auth/teacher-setup");
+      } else if (data.needsProfile) {
+        // Legacy: redirect to profile setup
         router.push("/auth/teacher-profile-setup");
       } else {
         // Redirect to teacher dashboard

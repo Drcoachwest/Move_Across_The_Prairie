@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         email: teacher.email,
         name: teacher.name,
         school: teacher.school,
+        schoolLevel: teacher.schoolLevel,
       }), {
         httpOnly: false,
         secure: process.env.NODE_ENV === "production",
@@ -64,14 +65,18 @@ export async function POST(request: NextRequest) {
         maxAge: 60 * 60 * 24 * 7,
       });
 
+      // Check if teacher needs to complete school level setup
+      const needsSetup = !teacher.schoolLevel || teacher.schoolLevel === 'ELEMENTARY';
+
       return NextResponse.json({
         success: true,
         message: "Teacher signed in successfully",
-        needsProfile: false,
+        needsSetup: needsSetup,
         teacher: {
           email: teacher.email,
           name: teacher.name,
           school: teacher.school,
+          schoolLevel: teacher.schoolLevel,
         },
       });
     }
