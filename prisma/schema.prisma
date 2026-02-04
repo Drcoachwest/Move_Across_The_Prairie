@@ -49,8 +49,17 @@ model Teacher {
   locked    Boolean    @default(false) // Temporary account restriction
   resetToken String?    // Token for password reset
   resetTokenExpiresAt DateTime? // Expiration time for reset token
+  
+  // School Level Distinction
+  schoolLevel String    @default("ELEMENTARY") // ELEMENTARY | SECONDARY
+  grade       Int?      // for elementary only (e.g., 3, 4, 5)
+  department  String?   // for secondary only (PE, Math, Science, etc.)
+  
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  
+  // Relations
+  classPeriods ClassPeriod[]
   
   @@map("teachers")
 }
@@ -137,6 +146,40 @@ model AdminLog {
   @@map("admin_logs")
 }
 
+model ClassPeriod {
+  id              String     @id @default(cuid())
+  teacherId       String
+  teacher         Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  periodNumber    Int        // 1, 2, 3, etc. (up to 7 for typical schedules)
+  schoolYear      String     // e.g., "2025-2026"
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  // Relations
+  studentAssignments StudentClassPeriodAssignment[]
+  
+  @@unique([teacherId, periodNumber, schoolYear])
+  @@index([teacherId])
+  @@map("class_periods")
+}
+
+model StudentClassPeriodAssignment {
+  id              String     @id @default(cuid())
+  studentId       String
+  student         Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classPeriodId   String
+  classPeriod     ClassPeriod @relation(fields: [classPeriodId], references: [id], onDelete: Cascade)
+  schoolYear      String     // e.g., "2025-2026"
+  semester        String?    // "Fall" or "Spring" (optional, can be used for semester-based tracking)
+  enrollmentDate  DateTime   @default(now())
+  dropDate        DateTime?  // null if still enrolled
+  
+  @@unique([studentId, classPeriodId, schoolYear])
+  @@index([studentId])
+  @@index([classPeriodId])
+  @@map("student_class_period_assignments")
+}
+
 model Student {
   id                String     @id @default(cuid())
   districtId        String     @unique // unique identifier across schools
@@ -147,12 +190,14 @@ model Student {
   currentGrade      Int        // 3-12
   currentSchool     String
   peTeacher         String
-  classroomTeacher  String?    // classroom teacher (e.g., Mrs. Smith)
+  classroomTeacher  String?    // classroom teacher (e.g., Mrs. Smith) - elementary only
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   
+  // Relations
   fitnesGramTests   FitnesGramTest[]
   studentHistory    StudentHistory[]
+  classroomPeriodAssignments StudentClassPeriodAssignment[] // secondary only
   
   @@index([districtId])
   @@index([currentSchool])
