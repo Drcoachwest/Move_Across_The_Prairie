@@ -116,6 +116,11 @@ export default function TeacherAssessmentPage() {
         if (response.ok) {
           const data = await response.json();
           if (data.teacher) {
+            // If secondary teacher, redirect to secondary assessment page
+            if (data.teacher.schoolLevel === 'SECONDARY') {
+              window.location.href = '/teacher/assessment/secondary';
+              return;
+            }
             setTeacherInfo(data.teacher);
             setLoading(false);
           } else {
