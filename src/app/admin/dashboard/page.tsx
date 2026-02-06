@@ -43,17 +43,17 @@ export default function AdminDashboard() {
           </Link>
 
           {/* Documents Card */}
-          <Link href="/admin/documents">
+          <Link href="/admin/curriculum">
             <div className="card cursor-pointer hover:shadow-lg transition">
               <div className="text-4xl mb-4">📚</div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Curriculum Documents
+                Curriculum Hub
               </h3>
               <p className="text-gray-600 mb-4">
-                Upload, organize, and manage curriculum materials and resources.
+                Add, edit, and manage curriculum resources for all grade levels.
               </p>
               <span className="text-blue-600 font-semibold">
-                Manage Documents →
+                Manage Resources →
               </span>
             </div>
           </Link>

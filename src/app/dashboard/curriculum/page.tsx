@@ -8,6 +8,7 @@ interface Resource {
   id: string;
   title: string;
   description: string;
+  band: string;
   grade: string;
   unit: string;
   subject: string;
@@ -22,6 +23,7 @@ export default function CurriculumLibrary() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [filteredResources, setFilteredResources] = useState<Resource[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedBand, setSelectedBand] = useState("");
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
@@ -42,6 +44,10 @@ export default function CurriculumLibrary() {
       );
     }
 
+    if (selectedBand) {
+      filtered = filtered.filter((r) => r.band === selectedBand);
+    }
+
     if (selectedGrade) {
       filtered = filtered.filter((r) => r.grade === selectedGrade);
     }
@@ -55,7 +61,7 @@ export default function CurriculumLibrary() {
     }
 
     setFilteredResources(filtered);
-  }, [resources, search, selectedGrade, selectedSubject, selectedUnit]);
+  }, [resources, search, selectedBand, selectedGrade, selectedSubject, selectedUnit]);
 
   const fetchResources = async () => {
     try {
@@ -77,10 +83,13 @@ export default function CurriculumLibrary() {
   const grades = [...new Set(resources.map((r) => r.grade).filter(Boolean))];
   const subjects = [...new Set(resources.map((r) => r.subject).filter(Boolean))];
   const units = [...new Set(resources.map((r) => r.unit).filter(Boolean))];
+  const bands = [...new Set(resources.map((r) => r.band).filter(Boolean))];
 
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <h1 className="text-3xl font-bold mb-8">Curriculum Library</h1>
+        
         {/* Search */}
         <div className="mb-8">
           <input
@@ -93,7 +102,25 @@ export default function CurriculumLibrary() {
         </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Band/Level
+            </label>
+            <select
+              value={selectedBand}
+              onChange={(e) => setSelectedBand(e.target.value)}
+              className="input-field"
+            >
+              <option value="">All Levels</option>
+              {bands.map((band) => (
+                <option key={band} value={band}>
+                  {band === "ELEMENTARY" ? "Elementary" : band === "MIDDLE" ? "Middle School" : "High School"}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Grade

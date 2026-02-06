@@ -81,7 +81,8 @@ model CurriculumResource {
   id          String     @id @default(cuid())
   title       String
   description String?
-  grade       String?    // e.g., "3rd", "6-8"
+  band        String     @default("ELEMENTARY") // ELEMENTARY | MIDDLE | HIGH
+  grade       String?    // e.g., "K-2", "3-5", "6-8", "9-12"
   unit        String?
   subject     String?
   tags        String?    // comma-separated tags

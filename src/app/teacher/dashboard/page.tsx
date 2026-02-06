@@ -28,7 +28,7 @@ export default function TeacherDashboard() {
 
         {/* Curriculum Library Card */}
         <Link
-          href="/teacher/dashboard/curriculum"
+          href="/dashboard/curriculum"
           className="bg-white p-6 rounded-lg shadow hover:shadow-md transition"
         >
           <div className="flex items-center mb-4">
@@ -38,7 +38,7 @@ export default function TeacherDashboard() {
             </h3>
           </div>
           <p className="text-gray-600">
-            Access curriculum materials and resources
+            Browse curriculum resources by grade, unit, and band
           </p>
         </Link>
 
