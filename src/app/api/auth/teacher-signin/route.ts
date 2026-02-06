@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
         maxAge: 60 * 60 * 24 * 7,
       });
 
-      // Check if teacher needs to complete school level setup
-      const needsSetup = !teacher.schoolLevel || teacher.schoolLevel === 'ELEMENTARY';
+      // Check if teacher needs to complete school level setup (only if schoolLevel is null/empty)
+      const needsSetup = !teacher.schoolLevel;
 
       return NextResponse.json({
         success: true,

@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { comparePassword, hashPassword } from "@/lib/password";
+import { comparePassword } from "@/lib/password";
 
 // Sign in endpoint for teachers
 export async function POST(request: NextRequest) {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import standards from '@/lib/fitnessgram-standards.json';
 
@@ -85,6 +86,7 @@ type StandardsData = {
 };
 
 export default function TeacherAssessmentPage() {
+  const router = useRouter();
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [tests, setTests] = useState<TestData[]>([]);
@@ -118,26 +120,26 @@ export default function TeacherAssessmentPage() {
           if (data.teacher) {
             // If secondary teacher, redirect to secondary assessment page
             if (data.teacher.schoolLevel === 'SECONDARY') {
-              window.location.href = '/teacher/assessment/secondary';
+              router.push('/teacher/assessment/secondary');
               return;
             }
             setTeacherInfo(data.teacher);
             setLoading(false);
           } else {
             // No teacher in session, redirect to login
-            window.location.href = '/auth/teacher-signin';
+            router.push('/auth/teacher-signin');
           }
         } else {
           // Not authenticated, redirect to login
-          window.location.href = '/auth/teacher-signin';
+          router.push('/auth/teacher-signin');
         }
       } catch (err) {
         console.error('Failed to get teacher info:', err);
-        window.location.href = '/auth/teacher-signin';
+        router.push('/auth/teacher-signin');
       }
     };
     getTeacherInfo();
-  }, []);
+  }, [router]);
 
   const loadStudents = async () => {
     try {

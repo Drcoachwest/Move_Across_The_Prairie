@@ -7,21 +7,18 @@ const prisma = new PrismaClient();
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const sessionToken = cookieStore.get('teacher_session')?.value;
+    const teacherId = cookieStore.get('teacher_session')?.value;
 
-    if (!sessionToken) {
+    if (!teacherId) {
       return NextResponse.json(
         { error: 'Not authenticated' },
         { status: 401 }
       );
     }
 
-    // Decode session token to get teacher email
-    const [email] = Buffer.from(sessionToken, 'base64').toString().split(':');
-
-    // Get teacher from database
+    // Get teacher from database by ID
     const teacher = await prisma.teacher.findUnique({
-      where: { email }
+      where: { id: teacherId }
     });
 
     if (!teacher) {
@@ -31,8 +28,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if already setup
-    if (teacher.schoolLevel !== 'ELEMENTARY') {
+    // Check if already setup (schoolLevel must be null to proceed with setup)
+    if (teacher.schoolLevel && teacher.schoolLevel !== 'ELEMENTARY') {
       return NextResponse.json(
         { error: 'Already setup' },
         { status: 400 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import standards from '@/lib/fitnessgram-standards.json';
 
@@ -91,6 +92,7 @@ type StandardsData = {
 };
 
 export default function SecondaryAssessmentPage() {
+  const router = useRouter();
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [classPeriods, setClassPeriods] = useState<ClassPeriod[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -123,22 +125,22 @@ export default function SecondaryAssessmentPage() {
             setLoading(false);
           } else if (data.teacher && data.teacher.schoolLevel === 'ELEMENTARY') {
             // Redirect elementary teachers to elementary assessment page
-            window.location.href = '/teacher/assessment';
+            router.push('/teacher/assessment');
           } else {
             // No teacher in session, redirect to login
-            window.location.href = '/auth/teacher-signin';
+            router.push('/auth/teacher-signin');
           }
         } else {
           // Not authenticated, redirect to login
-          window.location.href = '/auth/teacher-signin';
+          router.push('/auth/teacher-signin');
         }
       } catch (err) {
         console.error('Failed to get teacher info:', err);
-        window.location.href = '/auth/teacher-signin';
+        router.push('/auth/teacher-signin');
       }
     };
     getTeacherInfo();
-  }, []);
+  }, [router]);
 
   const loadClassPeriods = async () => {
     try {
@@ -440,7 +442,7 @@ export default function SecondaryAssessmentPage() {
             </div>
 
             {selectedPeriod && (
-              <form onSubmit={handleSubmitTest} className="space-y-6">
+              <form onSubmit={handleSubmitTest} className="space-y-6" suppressHydrationWarning>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Student</label>

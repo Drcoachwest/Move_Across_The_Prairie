@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
  * GET /api/auth/check-session
  * Validate teacher session and return teacher info
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const cookieStore = await cookies();
     const teacherSession = cookieStore.get("teacher_session")?.value;
@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         email: true,
         name: true,
         school: true,
+        schoolLevel: true,
       },
     });
 
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
         email: teacher.email,
         name: teacher.name,
         school: teacher.school,
+        schoolLevel: teacher.schoolLevel,
       },
     });
   } catch (error: any) {

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 
 // GET - Fetch all curriculum resources
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const resources = await prisma.curriculumResource.findMany({
       orderBy: { uploadedAt: "desc" },

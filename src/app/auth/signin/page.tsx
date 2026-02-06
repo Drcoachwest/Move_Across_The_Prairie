@@ -178,7 +178,7 @@ export default function SignIn() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  You'll create a password after your first login
+                  You&apos;ll create a password after your first login
                 </p>
               </div>
             )}

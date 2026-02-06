@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLessonPlanById, deleteLessonPlan, updateLessonPlan } from "@/lib/lesson-store";
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     // console.log("Fetching lesson plan with ID:", id);
     
     // Search for lesson plan in store
@@ -35,10 +35,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const data = await request.json();
 
     // Check if lesson plan exists
@@ -75,11 +75,11 @@ export async function PUT(
   }
 }
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     
     // Check if lesson plan exists
     const lessonPlan = getLessonPlanById(id);

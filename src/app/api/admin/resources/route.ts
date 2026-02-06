@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const grade = searchParams.get("grade");
-    const subject = searchParams.get("subject");
-    const unit = searchParams.get("unit");
-    const search = searchParams.get("search");
-
     // TODO: Query database with filters
-    const filters = { grade, subject, unit, search };
+    // const searchParams = request.nextUrl.searchParams;
+    // const grade = searchParams.get("grade");
+    // const subject = searchParams.get("subject");
+    // const unit = searchParams.get("unit");
+    // const search = searchParams.get("search");
+    // const filters = { grade, subject, unit, search };
     // console.log("Fetching resources with filters:", filters);
 
     return NextResponse.json({

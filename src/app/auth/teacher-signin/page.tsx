@@ -145,7 +145,7 @@ export default function TeacherSignIn() {
             </div>
           )}
 
-          <form onSubmit={handleSignIn} className="space-y-6">
+          <form onSubmit={handleSignIn} className="space-y-6" suppressHydrationWarning>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Email Address

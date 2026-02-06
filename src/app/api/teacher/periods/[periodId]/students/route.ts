@@ -1,30 +1,24 @@
 import { cookies } from 'next/headers';
-import db from '@/lib/db';
+import { prisma } from '@/lib/db';
 
 export async function GET(
-  req: Request,
-  { params }: { params: { periodId: string } }
+  _req: Request,
+  { params }: { params: Promise<{ periodId: string }> }
 ) {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('teacher_session')?.value;
+    const teacherId = cookieStore.get('teacher_session')?.value;
 
-    if (!sessionCookie) {
+    if (!teacherId) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Decode the teacher info from session cookie
-    const sessionData = JSON.parse(sessionCookie);
-    const teacherId = sessionData.id;
-
-    if (!teacherId) {
-      return Response.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    const { periodId } = await params;
 
     // Verify the period belongs to this teacher
-    const period = await db.classPeriod.findFirst({
+    const period = await prisma.classPeriod.findFirst({
       where: {
-        id: params.periodId,
+        id: periodId,
         teacherId,
       },
     });
@@ -34,9 +28,9 @@ export async function GET(
     }
 
     // Get all students assigned to this period for current school year
-    const assignments = await db.studentClassPeriodAssignment.findMany({
+    const assignments = await prisma.studentClassPeriodAssignment.findMany({
       where: {
-        classPeriodId: params.periodId,
+        classPeriodId: periodId,
         schoolYear: period.schoolYear,
         dropDate: null, // Only active students
       },

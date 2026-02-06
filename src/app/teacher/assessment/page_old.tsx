@@ -387,7 +387,7 @@ export default function TeacherAssessmentPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Step 1: Select a Classroom Teacher</h2>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Which classroom teacher's students do you want to assess?
+            Which classroom teacher&apos;s students do you want to assess?
           </label>
           <select
             value={selectedClassroomTeacher}
@@ -508,7 +508,7 @@ export default function TeacherAssessmentPage() {
                 {selectedClassroomTeacher && (
                   <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-600">
                     <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      {selectedClassroomTeacher}'s Class
+                      {selectedClassroomTeacher}&apos;s Class
                     </h3>
                     <p className="text-gray-600 mb-6">
                       {students.filter(s => s.classroomTeacher === selectedClassroomTeacher).length} students - Click to enter test data
@@ -815,7 +815,7 @@ export default function TeacherAssessmentPage() {
               </div>
 
               {tests.length === 0 ? (
-                <p className="text-gray-600">No tests recorded yet. Start entering data in the "Enter Test Data" tab.</p>
+                <p className="text-gray-600">No tests recorded yet. Start entering data in the &quot;Enter Test Data&quot; tab.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

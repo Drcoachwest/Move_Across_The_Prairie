@@ -1,25 +1,17 @@
 import { cookies } from 'next/headers';
-import db from '@/lib/db';
+import { prisma } from '@/lib/db';
 
-export async function GET(req: Request) {
+export async function GET(_req: Request) {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('teacher_session')?.value;
+    const teacherId = cookieStore.get('teacher_session')?.value;
 
-    if (!sessionCookie) {
+    if (!teacherId) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Decode the teacher info from session cookie (assuming it's stored as JSON)
-    const sessionData = JSON.parse(sessionCookie);
-    const teacherId = sessionData.id;
-
-    if (!teacherId) {
-      return Response.json({ error: 'Invalid session' }, { status: 401 });
-    }
-
     // Get all class periods for this teacher
-    const periods = await db.classPeriod.findMany({
+    const periods = await prisma.classPeriod.findMany({
       where: { teacherId },
       orderBy: { periodNumber: 'asc' },
       select: {

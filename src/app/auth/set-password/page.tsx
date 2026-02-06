@@ -57,7 +57,7 @@ export default function SetPassword() {
             Create Your Password
           </h1>
           <p className="text-gray-600 mb-6">
-            Set up a password for future logins. You'll use your email and
+            Set up a password for future logins. You&apos;ll use your email and
             password next time instead of the activation code.
           </p>
 
