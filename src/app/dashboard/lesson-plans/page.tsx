@@ -1,3 +1,15 @@
+/**
+ * @deprecated This page has been superseded by /dashboard/lessons (Lesson Bank)
+ * and /dashboard/lesson-builder (Lesson Builder)
+ * 
+ * TODO: Remove this route and folder entirely in a future cleanup.
+ * All functionality has been migrated to:
+ * - GET lessons: /dashboard/lessons
+ * - CREATE lessons: /dashboard/lesson-builder
+ * 
+ * As of February 2026, users should navigate through /dashboard/layout.tsx
+ */
+
 "use client";
 
 import Image from "next/image";
@@ -7,11 +19,12 @@ import { useState, useEffect } from "react";
 interface LessonPlan {
   id: string;
   title: string;
-  teacher: string;
-  campus: string;
-  gradeLevel: string;
-  date: string;
-  isDraft: boolean;
+  band: string;
+  gradeGroup: string;
+  unit: string;
+  durationMinutes: number;
+  objectives: string;
+  createdAt: string;
 }
 
 export default function LessonPlans() {
@@ -26,8 +39,8 @@ export default function LessonPlans() {
     try {
       const response = await fetch("/api/lessons");
       const data = await response.json();
-      if (data.success) {
-        setLessonPlans(data.lessonPlans);
+      if (data.lessons) {
+        setLessonPlans(data.lessons);
       }
     } catch (error) {
       console.error("Error fetching lesson plans:", error);
@@ -41,7 +54,7 @@ export default function LessonPlans() {
 
     setDeletingId(id);
     try {
-      const response = await fetch(`/api/lessons?id=${id}`, {
+      const response = await fetch(`/api/lessons/${id}`, {
         method: "DELETE",
       });
 
@@ -51,7 +64,7 @@ export default function LessonPlans() {
         // Remove the deleted lesson plan from the state
         setLessonPlans(lessonPlans.filter(plan => plan.id !== id));
       } else {
-        alert(data.message || "Failed to delete lesson plan");
+        alert(data.error || "Failed to delete lesson plan");
       }
     } catch (error) {
       console.error("Error deleting lesson plan:", error);
@@ -103,10 +116,15 @@ export default function LessonPlans() {
                   </button>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">
-                  {plan.teacher} • {plan.campus} • Grade {plan.gradeLevel}
+                  <span className="inline-block bg-gray-100 px-2 py-1 rounded text-xs mr-2">{plan.band}</span>
+                  <span className="inline-block bg-gray-100 px-2 py-1 rounded text-xs mr-2">Grades {plan.gradeGroup}</span>
+                  <span className="inline-block bg-gray-100 px-2 py-1 rounded text-xs">{plan.durationMinutes} min</span>
+                </p>
+                <p className="text-gray-700 text-sm mb-3 line-clamp-2">
+                  {plan.unit}
                 </p>
                 <p className="text-gray-500 text-xs mb-3">
-                  {plan.date} • {plan.isDraft ? "Draft" : "Published"}
+                  Created {new Date(plan.createdAt).toLocaleDateString()}
                 </p>
                 <Link
                   href={`/dashboard/lesson-plans/${plan.id}`}

@@ -2,68 +2,34 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-
-interface Resource {
-  id: string;
-  title: string;
-  type: string;
-}
+import { useState } from "react";
 
 export default function CreateLessonPlan() {
   const [formData, setFormData] = useState({
     title: "",
-    teacher: "",
-    campus: "",
-    gradeLevel: "",
-    date: new Date().toISOString().split("T")[0], // Auto-populate current date
-    safetyAndManagement: "",
-    instantActivityWarmUp: "",
-    skillIntroduction: "",
-    skillPractice: "",
-    applicationActivity: "",
-    coolDownClosure: "",
+    band: "ELEMENTARY",
+    gradeGroup: "",
+    unit: "",
+    durationMinutes: "45",
+    objectives: "",
+    standards: "",
+    equipment: "",
+    warmUp: "",
+    mainActivity: "",
+    modifications: "",
     assessment: "",
-    mvpa: "",
-    adaptations: "",
-    teacherReflections: "",
+    closure: "",
+    notes: "",
   });
 
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [selectedResources, setSelectedResources] = useState<string[]>([]);
-  const [showResourcePicker, setShowResourcePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    fetchResources();
-  }, []);
-
-  const fetchResources = async () => {
-    try {
-      const response = await fetch("/api/admin/resources");
-      const data = await response.json();
-      if (data.success) {
-        setResources(data.resources);
-      }
-    } catch (error) {
-      console.error("Error fetching resources:", error);
-    }
-  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleResourceToggle = (resourceId: string) => {
-    setSelectedResources((prev) =>
-      prev.includes(resourceId)
-        ? prev.filter((id) => id !== resourceId)
-        : [...prev, resourceId]
-    );
   };
 
   const handleSave = async (draft: boolean) => {
@@ -75,9 +41,20 @@ export default function CreateLessonPlan() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          isDraft: draft,
-          selectedResources,
+          title: formData.title,
+          band: formData.band,
+          gradeGroup: formData.gradeGroup,
+          unit: formData.unit,
+          durationMinutes: parseInt(formData.durationMinutes, 10),
+          objectives: formData.objectives,
+          standards: formData.standards || null,
+          equipment: formData.equipment || null,
+          warmUp: formData.warmUp,
+          mainActivity: formData.mainActivity,
+          modifications: formData.modifications || null,
+          assessment: formData.assessment,
+          closure: formData.closure,
+          notes: formData.notes || null,
         }),
       });
 
@@ -88,7 +65,7 @@ export default function CreateLessonPlan() {
           window.location.href = "/dashboard/lesson-plans";
         }, 1500);
       } else {
-        setMessage(data.message || "Failed to save");
+        setMessage(data.error || data.message || "Failed to save");
       }
     } catch (error) {
       setMessage("An error occurred");
@@ -145,7 +122,7 @@ export default function CreateLessonPlan() {
             <div className="grid grid-cols-1 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Title
+                  Title *
                 </label>
                 <input
                   type="text"
@@ -160,247 +137,214 @@ export default function CreateLessonPlan() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Teacher Name
+                  Band *
+                </label>
+                <select
+                  name="band"
+                  value={formData.band}
+                  onChange={handleInputChange}
+                  className="input-field"
+                  required
+                >
+                  <option value="ELEMENTARY">Elementary</option>
+                  <option value="MIDDLE">Middle School</option>
+                  <option value="HIGH">High School</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Grade Group *
+                </label>
+                <select
+                  name="gradeGroup"
+                  value={formData.gradeGroup}
+                  onChange={handleInputChange}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Select grade group</option>
+                  <option value="K-2">K-2</option>
+                  <option value="3-5">3-5</option>
+                  <option value="6-8">6-8</option>
+                  <option value="9-12">9-12</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Unit *
                 </label>
                 <input
                   type="text"
-                  name="teacher"
-                  value={formData.teacher}
+                  name="unit"
+                  value={formData.unit}
                   onChange={handleInputChange}
                   className="input-field"
+                  placeholder="e.g., Unit 1, Locomotor Skills"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Campus
+                  Duration (minutes) *
                 </label>
                 <input
-                  type="text"
-                  name="campus"
-                  value={formData.campus}
+                  type="number"
+                  name="durationMinutes"
+                  value={formData.durationMinutes}
                   onChange={handleInputChange}
                   className="input-field"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Grade Level
-                </label>
-                <input
-                  type="text"
-                  name="gradeLevel"
-                  value={formData.gradeLevel}
-                  onChange={handleInputChange}
-                  className="input-field"
-                  placeholder="K, 1st, 2nd, etc."
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleInputChange}
-                  className="input-field"
+                  min="10"
+                  max="180"
                   required
                 />
               </div>
             </div>
           </div>
 
-          {/* Safety and Management Considerations */}
+          {/* Standards and Objectives */}
           <div className="border-b pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Safety and Management Considerations
+              Standards and Objectives
             </h2>
-            <textarea
-              name="safetyAndManagement"
-              value={formData.safetyAndManagement}
-              onChange={handleInputChange}
-              className="input-field h-24"
-              placeholder="Enter any safety and management considerations..."
-            />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Learning Objectives *
+                </label>
+                <textarea
+                  name="objectives"
+                  value={formData.objectives}
+                  onChange={handleInputChange}
+                  className="input-field h-24"
+                  placeholder="What will students learn? What will they be able to do?"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Standards (TEKS, etc.)
+                </label>
+                <textarea
+                  name="standards"
+                  value={formData.standards}
+                  onChange={handleInputChange}
+                  className="input-field h-20"
+                  placeholder="Enter relevant standards..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Equipment Needed
+                </label>
+                <textarea
+                  name="equipment"
+                  value={formData.equipment}
+                  onChange={handleInputChange}
+                  className="input-field h-20"
+                  placeholder="List materials and equipment..."
+                />
+              </div>
+            </div>
           </div>
 
           {/* Lesson Activities and Instruction */}
           <div className="border-b pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Lesson Activities and Instruction
+              Lesson Activities
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Instant Activity / Warm Up
+                  Warm Up / Engagement *
                 </label>
                 <textarea
-                  name="instantActivityWarmUp"
-                  value={formData.instantActivityWarmUp}
+                  name="warmUp"
+                  value={formData.warmUp}
                   onChange={handleInputChange}
                   className="input-field h-20"
+                  placeholder="How will you engage students and prepare them for the lesson?"
+                  required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Skill Introduction
+                  Main Activity / Instruction *
                 </label>
                 <textarea
-                  name="skillIntroduction"
-                  value={formData.skillIntroduction}
+                  name="mainActivity"
+                  value={formData.mainActivity}
                   onChange={handleInputChange}
-                  className="input-field h-20"
+                  className="input-field h-32"
+                  placeholder="Describe the main lesson activity, practice, and application..."
+                  required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Skill Practice
+                  Modifications / Differentiation
                 </label>
                 <textarea
-                  name="skillPractice"
-                  value={formData.skillPractice}
+                  name="modifications"
+                  value={formData.modifications}
                   onChange={handleInputChange}
                   className="input-field h-20"
+                  placeholder="How will you adapt for different skill levels?"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Application Activity
+                  Closure / Cool Down *
                 </label>
                 <textarea
-                  name="applicationActivity"
-                  value={formData.applicationActivity}
+                  name="closure"
+                  value={formData.closure}
                   onChange={handleInputChange}
                   className="input-field h-20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cool Down / Closure
-                </label>
-                <textarea
-                  name="coolDownClosure"
-                  value={formData.coolDownClosure}
-                  onChange={handleInputChange}
-                  className="input-field h-20"
+                  placeholder="How will you wrap up and review learning?"
+                  required
                 />
               </div>
             </div>
           </div>
 
-          {/* Resource Picker */}
-          <div className="border-b pb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Curriculum Resources
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowResourcePicker(!showResourcePicker)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                {showResourcePicker ? "Hide Resources" : "Select Resources"}
-              </button>
-            </div>
-
-            {showResourcePicker && (
-              <div className="border rounded-lg p-4 mb-4 bg-gray-50">
-                {resources.length === 0 ? (
-                  <p className="text-sm text-gray-600">No resources available</p>
-                ) : (
-                  <div className="space-y-2">
-                    {resources.map((resource) => (
-                      <label key={resource.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedResources.includes(resource.id)}
-                          onChange={() => handleResourceToggle(resource.id)}
-                          className="mr-2"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {resource.title}
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({resource.type})
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedResources.length > 0 && (
-              <div className="p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-                {selectedResources.length} resource(s) selected
-              </div>
-            )}
-          </div>
-
-          {/* Assessment and Reflection */}
+          {/* Assessment and Notes */}
           <div className="border-b pb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Assessment and Reflection
+              Assessment and Notes
             </h2>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Assessment (What are you looking for?)
+                  Assessment *
                 </label>
                 <textarea
                   name="assessment"
                   value={formData.assessment}
                   onChange={handleInputChange}
-                  className="input-field h-20"
+                  className="input-field h-24"
+                  placeholder="How will you assess student learning? What are you looking for?"
+                  required
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  MVPA (Moderate to Vigorous Physical Activity)
+                  Notes / Reflections
                 </label>
                 <textarea
-                  name="mvpa"
-                  value={formData.mvpa}
+                  name="notes"
+                  value={formData.notes}
                   onChange={handleInputChange}
-                  className="input-field h-20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Adaptations
-                </label>
-                <textarea
-                  name="adaptations"
-                  value={formData.adaptations}
-                  onChange={handleInputChange}
-                  className="input-field h-20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Teacher Reflections
-                </label>
-                <textarea
-                  name="teacherReflections"
-                  value={formData.teacherReflections}
-                  onChange={handleInputChange}
-                  className="input-field h-20"
+                  className="input-field h-24"
+                  placeholder="Any additional notes, reflections, or observations..."
                 />
               </div>
             </div>
@@ -411,18 +355,10 @@ export default function CreateLessonPlan() {
             <button
               type="button"
               disabled={saving}
-              onClick={() => handleSave(true)}
-              className="flex-1 px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save as Draft"}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
               onClick={() => handleSave(false)}
               className="flex-1 btn-primary disabled:opacity-50"
             >
-              {saving ? "Publishing..." : "Publish"}
+              {saving ? "Saving..." : "Save Lesson"}
             </button>
             <Link
               href="/dashboard/lesson-plans"

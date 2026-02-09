@@ -27,7 +27,7 @@ export default function Dashboard() {
         </Link>
 
         {/* Lesson Plan Builder Card */}
-        <Link href="/dashboard/lesson-plans">
+        <Link href="/dashboard/lesson-builder">
           <div className="card cursor-pointer hover:shadow-lg transition">
             <div className="text-4xl mb-4">✏️</div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">

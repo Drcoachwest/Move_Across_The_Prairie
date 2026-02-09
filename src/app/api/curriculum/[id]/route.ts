@@ -18,14 +18,68 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { title, description, band, grade, unit, subject, tags, type, externalUrl } = body;
+    let { title, description, band, gradeGroup, unit, subject, tags, type, externalUrl } = body;
+
+    // Trim all string inputs
+    title = title?.trim();
+    description = description?.trim();
+    band = band?.trim();
+    gradeGroup = gradeGroup?.trim();
+    unit = unit?.trim();
+    subject = subject?.trim();
+    tags = tags?.trim();
+    type = type?.trim();
+    externalUrl = externalUrl?.trim();
 
     // Validate required fields
-    if (!title || !type) {
+    if (!title || title.length === 0) {
       return NextResponse.json(
-        { error: "Title and type are required" },
+        { error: "Title is required and cannot be empty", field: "title" },
         { status: 400 }
       );
+    }
+
+    if (!type || type.length === 0) {
+      return NextResponse.json(
+        { error: "Type is required and cannot be empty", field: "type" },
+        { status: 400 }
+      );
+    }
+
+    // Validate band
+    const validBands = ["ELEMENTARY", "MIDDLE", "HIGH"];
+    if (band && !validBands.includes(band)) {
+      return NextResponse.json(
+        { error: `Band must be one of: ${validBands.join(", ")}`, field: "band" },
+        { status: 400 }
+      );
+    }
+
+    // Validate gradeGroup
+    const validGradeGroups = ["K-2", "3-5", "6-8", "9-12"];
+    if (gradeGroup && !validGradeGroups.includes(gradeGroup)) {
+      return NextResponse.json(
+        { error: `Grade group must be one of: ${validGradeGroups.join(", ")}`, field: "gradeGroup" },
+        { status: 400 }
+      );
+    }
+
+    // Validate external URL if provided
+    if (type === "link" && externalUrl) {
+      if (externalUrl.length === 0) {
+        return NextResponse.json(
+          { error: "URL cannot be empty for link type", field: "externalUrl" },
+          { status: 400 }
+        );
+      }
+      try {
+        new URL(externalUrl);
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid URL format", field: "externalUrl" },
+          { status: 400 }
+        );
+      }
     }
 
     // Get existing resource
@@ -47,7 +101,7 @@ export async function PUT(
         title,
         description: description || null,
         band: band || "ELEMENTARY",
-        grade: grade || null,
+        gradeGroup: gradeGroup || null,
         unit: unit || null,
         subject: subject || null,
         tags: tags || null,
@@ -68,7 +122,7 @@ export async function PUT(
 
 // DELETE - Remove a curriculum resource
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

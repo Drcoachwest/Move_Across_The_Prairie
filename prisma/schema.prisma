@@ -82,7 +82,7 @@ model CurriculumResource {
   title       String
   description String?
   band        String     @default("ELEMENTARY") // ELEMENTARY | MIDDLE | HIGH
-  grade       String?    // e.g., "K-2", "3-5", "6-8", "9-12"
+  gradeGroup  String?    // "K-2", "3-5", "6-8", "9-12"
   unit        String?
   subject     String?
   tags        String?    // comma-separated tags
@@ -257,4 +257,30 @@ model StudentHistory {
   @@index([studentId])
   @@index([school])
   @@map("student_history")
+}
+
+model Lesson {
+  id              String   @id @default(cuid())
+  title           String
+  band            String   @default("ELEMENTARY") // "ELEMENTARY" | "MIDDLE" | "HIGH"
+  gradeGroup      String   // "K-2" | "3-5" | "6-8" | "9-12"
+  unit            String
+  durationMinutes Int
+  objectives      String
+  standards       String?
+  equipment       String?
+  warmUp          String
+  mainActivity    String
+  modifications   String?
+  assessment      String
+  closure         String
+  notes           String?
+  resourceIds     String?  // comma-separated CurriculumResource IDs
+  createdByEmail  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdByEmail])
+  @@index([band, gradeGroup, unit])
+  @@map("lessons")
 }

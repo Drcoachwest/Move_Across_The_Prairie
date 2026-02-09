@@ -87,7 +87,13 @@ export default function AdminLayout({
                 href="/admin/dashboard"
                 className="text-gray-300 hover:text-white font-medium"
               >
-                ← Dashboard
+                Dashboard
+              </Link>
+              <Link 
+                href="/admin/curriculum"
+                className="text-gray-300 hover:text-white font-medium"
+              >
+                Curriculum Hub
               </Link>
               <button
                 onClick={handleSignOut}

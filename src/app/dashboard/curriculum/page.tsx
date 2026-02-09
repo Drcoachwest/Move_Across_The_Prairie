@@ -1,7 +1,5 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { useState, useEffect } from "react";
 
 interface Resource {
@@ -9,7 +7,7 @@ interface Resource {
   title: string;
   description: string;
   band: string;
-  grade: string;
+  gradeGroup: string;
   unit: string;
   subject: string;
   type: string;
@@ -24,14 +22,30 @@ export default function CurriculumLibrary() {
   const [filteredResources, setFilteredResources] = useState<Resource[]>([]);
   const [search, setSearch] = useState("");
   const [selectedBand, setSelectedBand] = useState("");
-  const [selectedGrade, setSelectedGrade] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedGradeGroup, setSelectedGradeGroup] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchResources();
   }, []);
+
+  // Auto-sync grade based on level selection
+  useEffect(() => {
+    if (selectedBand === "MIDDLE" && selectedGradeGroup !== "6-8") {
+      setSelectedGradeGroup("6-8");
+    } else if (selectedBand === "HIGH" && selectedGradeGroup !== "9-12") {
+      setSelectedGradeGroup("9-12");
+    } else if (selectedBand === "ELEMENTARY") {
+      // Keep current if K-2 or 3-5, otherwise reset
+      if (selectedGradeGroup !== "K-2" && selectedGradeGroup !== "3-5" && selectedGradeGroup !== "") {
+        setSelectedGradeGroup("");
+      }
+    } else if (selectedBand === "" && selectedGradeGroup !== "") {
+      // All levels - keep grade as is
+      setSelectedGradeGroup("");
+    }
+  }, [selectedBand, selectedGradeGroup]);
 
   useEffect(() => {
     let filtered = resources;
@@ -48,12 +62,8 @@ export default function CurriculumLibrary() {
       filtered = filtered.filter((r) => r.band === selectedBand);
     }
 
-    if (selectedGrade) {
-      filtered = filtered.filter((r) => r.grade === selectedGrade);
-    }
-
-    if (selectedSubject) {
-      filtered = filtered.filter((r) => r.subject === selectedSubject);
+    if (selectedGradeGroup) {
+      filtered = filtered.filter((r) => r.gradeGroup === selectedGradeGroup);
     }
 
     if (selectedUnit) {
@@ -61,7 +71,7 @@ export default function CurriculumLibrary() {
     }
 
     setFilteredResources(filtered);
-  }, [resources, search, selectedBand, selectedGrade, selectedSubject, selectedUnit]);
+  }, [resources, search, selectedBand, selectedGradeGroup, selectedUnit]);
 
   const fetchResources = async () => {
     try {
@@ -80,15 +90,40 @@ export default function CurriculumLibrary() {
     }
   };
 
-  const grades = [...new Set(resources.map((r) => r.grade).filter(Boolean))];
-  const subjects = [...new Set(resources.map((r) => r.subject).filter(Boolean))];
+  const gradeGroups = [...new Set(resources.map((r) => r.gradeGroup).filter(Boolean))];
   const units = [...new Set(resources.map((r) => r.unit).filter(Boolean))];
   const bands = [...new Set(resources.map((r) => r.band).filter(Boolean))];
+
+  const formatLevel = (band: string) => {
+    if (band === "ELEMENTARY") return "Elementary";
+    if (band === "MIDDLE") return "Middle School";
+    if (band === "HIGH") return "High School";
+    return band;
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setSelectedBand("");
+    setSelectedGradeGroup("");
+    setSelectedUnit("");
+  };
+
+  const hasActiveFilters = search || selectedBand || selectedGradeGroup || selectedUnit;
 
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold mb-8">Curriculum Library</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">Curriculum Library</h1>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
         
         {/* Search */}
         <div className="mb-8">
@@ -102,10 +137,10 @@ export default function CurriculumLibrary() {
         </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Band/Level
+              Level
             </label>
             <select
               value={selectedBand}
@@ -115,7 +150,7 @@ export default function CurriculumLibrary() {
               <option value="">All Levels</option>
               {bands.map((band) => (
                 <option key={band} value={band}>
-                  {band === "ELEMENTARY" ? "Elementary" : band === "MIDDLE" ? "Middle School" : "High School"}
+                  {formatLevel(band)}
                 </option>
               ))}
             </select>
@@ -125,36 +160,39 @@ export default function CurriculumLibrary() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Grade
             </label>
-            <select
-              value={selectedGrade}
-              onChange={(e) => setSelectedGrade(e.target.value)}
-              className="input-field"
-            >
-              <option value="">All Grades</option>
-              {grades.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subject
-            </label>
-            <select
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="input-field"
-            >
-              <option value="">All Subjects</option>
-              {subjects.map((subject) => (
-                <option key={subject} value={subject}>
-                  {subject}
-                </option>
-              ))}
-            </select>
+            {selectedBand === "MIDDLE" || selectedBand === "HIGH" ? (
+              <div>
+                <input
+                  type="text"
+                  value={selectedGradeGroup}
+                  disabled
+                  className="input-field bg-gray-100 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedBand === "MIDDLE" ? "Fixed for Middle School (6-8)" : "Fixed for High School (9-12)"}
+                </p>
+              </div>
+            ) : (
+              <select
+                value={selectedGradeGroup}
+                onChange={(e) => setSelectedGradeGroup(e.target.value)}
+                className="input-field"
+              >
+                <option value="">All Grades</option>
+                {selectedBand === "ELEMENTARY" ? (
+                  <>
+                    <option value="K-2">K-2</option>
+                    <option value="3-5">3-5</option>
+                  </>
+                ) : (
+                  gradeGroups.map((gradeGroup) => (
+                    <option key={gradeGroup} value={gradeGroup}>
+                      {gradeGroup}
+                    </option>
+                  ))
+                )}
+              </select>
+            )}
           </div>
 
           <div>
@@ -209,8 +247,8 @@ export default function CurriculumLibrary() {
                 )}
 
                 <div className="space-y-1 text-xs text-gray-600 mb-4">
-                  {resource.grade && <p>Grade: {resource.grade}</p>}
-                  {resource.subject && <p>Subject: {resource.subject}</p>}
+                  {resource.band && <p>Level: {formatLevel(resource.band)}</p>}
+                  {resource.gradeGroup && <p>Grade: {resource.gradeGroup}</p>}
                   {resource.unit && <p>Unit: {resource.unit}</p>}
                 </div>
 

@@ -36,7 +36,25 @@ export default function DashboardLayout({
                 href="/dashboard"
                 className="text-gray-600 hover:text-gray-900 font-medium"
               >
-                ← Back to Dashboard
+                Dashboard
+              </Link>
+              <Link 
+                href="/dashboard/curriculum"
+                className="text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Curriculum Hub
+              </Link>
+              <Link 
+                href="/dashboard/lesson-builder"
+                className="text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Lesson Builder
+              </Link>
+              <Link 
+                href="/dashboard/lessons"
+                className="text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Lesson Bank
               </Link>
               <button
                 onClick={handleSignOut}
