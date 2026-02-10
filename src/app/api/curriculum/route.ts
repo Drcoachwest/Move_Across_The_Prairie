@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logAdminAction } from "@/lib/admin-logs";
 import { cookies } from "next/headers";
 
 // GET - Fetch all curriculum resources
@@ -10,7 +11,12 @@ export async function GET(request: NextRequest) {
     const teacherSession = cookieStore.get("teacher_session");
     const adminSession = cookieStore.get("admin_session");
     
+    // DEBUG: Log which session type is being used
+    const sessionType = adminSession ? "admin" : teacherSession ? "teacher" : "none";
+    console.log(`[GET /api/curriculum] Session type: ${sessionType}`);
+    
     if (!teacherSession && !adminSession) {
+      console.log("[GET /api/curriculum] Access denied - no session found");
       return NextResponse.json(
         { error: "Unauthorized. Please sign in to access curriculum resources." },
         { status: 401 }
@@ -52,6 +58,7 @@ export async function GET(request: NextRequest) {
       orderBy: { uploadedAt: "desc" },
     });
 
+    console.log(`[GET /api/curriculum] Returning ${resources.length} resources to ${sessionType} user`);
     return NextResponse.json({ resources });
   } catch (error) {
     console.error("Error fetching curriculum resources:", error);
@@ -153,6 +160,19 @@ export async function POST(request: NextRequest) {
         externalUrl: type === "link" ? externalUrl : null,
         createdBy: "admin",
       },
+    });
+
+    await logAdminAction("curriculum_resource_create", {
+      title,
+      band: band || "ELEMENTARY",
+      gradeGroup: gradeGroup || null,
+      unit: unit || null,
+      subject: subject || null,
+      type,
+      externalUrl: type === "link" ? externalUrl : null,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      userAgent: request.headers.get("user-agent") || null,
+      resourceId: resource.id,
     });
 
     return NextResponse.json({ success: true, resource }, { status: 201 });

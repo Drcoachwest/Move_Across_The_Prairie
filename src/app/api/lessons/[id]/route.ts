@@ -80,8 +80,9 @@ export async function GET(
             id: true,
             title: true,
             unit: true,
-            url: true,
-            fileName: true,
+            type: true,
+            fileUrl: true,
+            externalUrl: true,
           },
         });
         resources = curriculumResources;

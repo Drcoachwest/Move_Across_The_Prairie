@@ -66,10 +66,14 @@ export default function EditLessonPlan() {
 
   const fetchResources = async () => {
     try {
-      const response = await fetch("/api/admin/resources");
+      const response = await fetch("/api/curriculum");
       const data = await response.json();
-      if (data.success) {
-        setResources(data.resources);
+      if (data.resources) {
+        setResources(data.resources.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          type: r.type,
+        })));
       }
     } catch (error) {
       console.error("Error fetching resources:", error);

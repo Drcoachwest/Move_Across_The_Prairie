@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getLessonDraft } from '@/lib/lessonSuggestions';
+import { generateDraftVariants } from '@/lib/lessonSuggestions';
+import { YAG_UNITS } from '@/lib/yagUnits';
 
 const GRADE_GROUPS: Record<string, string[]> = {
   ELEMENTARY: ['K-2', '3-5'],
@@ -34,6 +35,16 @@ interface FormErrors {
   [key: string]: string;
 }
 
+interface DraftVariant {
+  warmUp: string;
+  mainActivity: string;
+  modifications: string;
+  assessment: string;
+  closure: string;
+  notes?: string;
+  titleSuggestion?: string;
+}
+
 export default function LessonBuilderPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormData>({
@@ -59,6 +70,9 @@ export default function LessonBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [draftOptions, setDraftOptions] = useState<DraftVariant[]>([]);
+  const [draftUnitFocus, setDraftUnitFocus] = useState('');
+  const [draftUsedFallback, setDraftUsedFallback] = useState(false);
   
   // Curriculum resources
   interface CurriculumResource {
@@ -85,11 +99,12 @@ export default function LessonBuilderPage() {
         const response = await fetch('/api/curriculum');
         if (response.ok) {
           const data = await response.json();
-          const curriculumUnits = Array.from(
-            new Set((data.curriculum || []).map((item: any) => item.unit).filter(Boolean))
+          const resources = data.resources || [];
+          const curriculumUnits: string[] = Array.from(
+            new Set(resources.map((item: any) => item.unit).filter(Boolean))
           );
           setUnits(curriculumUnits.sort());
-          setAllResources(data.curriculum || []);
+          setAllResources(resources);
         }
       } catch (err) {
         console.error('Failed to load resources:', err);
@@ -129,9 +144,7 @@ export default function LessonBuilderPage() {
     setForm((prev) => ({ ...prev, customUnit: e.target.value }));
   };
 
-  // Generate draft from section 1
-  const handleGenerateDraft = () => {
-    const requiredFields = ['title', 'unit', 'objectives'];
+  const generateDraftOptions = (seed = Date.now()) => {
     const actualUnit = showCustomUnit ? form.customUnit : form.unit;
 
     const newErrors: FormErrors = {};
@@ -144,22 +157,47 @@ export default function LessonBuilderPage() {
       return;
     }
 
-    const draft = getLessonDraft({
-      band: form.band,
-      gradeGroup: form.gradeGroup,
-      unit: actualUnit,
-      durationMinutes: form.durationMinutes,
-    });
+    setLoading(true);
+    const draftResult = generateDraftVariants(
+      {
+        band: form.band,
+        gradeGroup: form.gradeGroup,
+        unit: actualUnit,
+        durationMinutes: form.durationMinutes,
+      },
+      3,
+      seed
+    );
 
+    setDraftOptions(draftResult.variants);
+    setDraftUnitFocus(
+      draftResult.unitKey && draftResult.unitKey !== '__fallback__' ? draftResult.unitKey : actualUnit
+    );
+    setDraftUsedFallback(draftResult.usedFallback);
+    setErrors({});
+    setLoading(false);
+  };
+
+  const handleGenerateDraft = () => {
+    generateDraftOptions();
+  };
+
+  const handleRegenerateDrafts = () => {
+    generateDraftOptions(Date.now());
+  };
+
+  const handleUseDraft = (draft: DraftVariant) => {
     setForm((prev) => ({
       ...prev,
       unit: showCustomUnit ? '' : prev.unit,
-      customUnit: showCustomUnit ? actualUnit : '',
+      customUnit: showCustomUnit ? form.customUnit : prev.customUnit,
       warmUp: draft.warmUp,
       mainActivity: draft.mainActivity,
       modifications: draft.modifications || '',
       assessment: draft.assessment,
       closure: draft.closure,
+      notes: draft.notes || prev.notes,
+      title: prev.title.trim() ? prev.title : draft.titleSuggestion || prev.title,
     }));
 
     setErrors({});
@@ -311,6 +349,8 @@ export default function LessonBuilderPage() {
   const availableResourceGrades = getAvailableResourceGrades();
   const filteredResources = getFilteredResources();
   const selectedResources = allResources.filter((r) => selectedResourceIds.includes(r.id));
+  const previewText = (text: string) => (text.length > 120 ? `${text.slice(0, 120)}…` : text);
+  const unitOptions = form.band === 'ELEMENTARY' ? YAG_UNITS.ELEMENTARY['K-2'] : units;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -414,7 +454,7 @@ export default function LessonBuilderPage() {
               }`}
             >
               <option value="">Select a unit...</option>
-              {units.map((u) => (
+              {unitOptions.map((u) => (
                 <option key={u} value={u}>
                   {u}
                 </option>
@@ -496,23 +536,80 @@ export default function LessonBuilderPage() {
         </div>
 
         {/* Section 1 Buttons */}
-        <div className="flex gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={handleGenerateDraft}
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >
-            {loading ? 'Generating...' : 'Generate Draft'}
+            {loading ? 'Generating...' : 'Generate Draft Options'}
           </button>
           <button
             onClick={handleReset}
             disabled={saving}
-            className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium"
+            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium"
           >
             Reset
           </button>
+          {draftOptions.length > 0 && (
+            <button
+              onClick={handleRegenerateDrafts}
+              disabled={saving}
+              className="md:col-span-2 px-6 py-3 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50 font-medium"
+            >
+              Regenerate
+            </button>
+          )}
         </div>
       </div>
+
+      {draftOptions.length > 0 && (
+        <div className="bg-white rounded-lg shadow mb-8 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Draft Options</h2>
+            <p className="text-sm text-gray-500">Choose a draft to start editing</p>
+          </div>
+          <div className="mb-4">
+            <p className="text-sm text-gray-700">
+              Unit focus: <span className="font-medium text-gray-900">{draftUnitFocus || 'General PE'}</span>
+            </p>
+            {draftUsedFallback && (
+              <p className="text-sm text-amber-700 mt-1">
+                General PE template used (no unit-specific template found).
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {draftOptions.map((draft, index) => (
+              <div key={`draft-${index}`} className="border border-gray-200 rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Draft {String.fromCharCode(65 + index)}</h3>
+                </div>
+                <div className="space-y-3 text-sm text-gray-700">
+                  <div>
+                    <p className="font-medium text-gray-900">Warm Up</p>
+                    <p>{previewText(draft.warmUp)}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Main Activity</p>
+                    <p>{previewText(draft.mainActivity)}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Assessment</p>
+                    <p>{previewText(draft.assessment)}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleUseDraft(draft)}
+                  className="w-full px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium"
+                >
+                  Use this draft
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* SECTION 2: LESSON CONTENT */}
       <div className="bg-white rounded-lg shadow mb-8 p-6">

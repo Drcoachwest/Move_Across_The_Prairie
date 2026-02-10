@@ -114,12 +114,18 @@ export default function TeacherAssessmentPage() {
   useEffect(() => {
     const getTeacherInfo = async () => {
       try {
+        console.log('[TeacherAssessment] Checking session...');
         const response = await fetch('/api/auth/check-session');
+        console.log('[TeacherAssessment] Session check response:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('[TeacherAssessment] Session data:', data);
+          
           if (data.teacher) {
             // If secondary teacher, redirect to secondary assessment page
             if (data.teacher.schoolLevel === 'SECONDARY') {
+              console.log('[TeacherAssessment] Secondary teacher, redirecting to /teacher/assessment/secondary');
               router.push('/teacher/assessment/secondary');
               return;
             }
@@ -127,14 +133,16 @@ export default function TeacherAssessmentPage() {
             setLoading(false);
           } else {
             // No teacher in session, redirect to login
+            console.log('[TeacherAssessment] No teacher in session, redirecting to login');
             router.push('/auth/teacher-signin');
           }
         } else {
           // Not authenticated, redirect to login
+          console.log('[TeacherAssessment] Not authenticated (status', response.status, '), redirecting to login');
           router.push('/auth/teacher-signin');
         }
       } catch (err) {
-        console.error('Failed to get teacher info:', err);
+        console.error('[TeacherAssessment] Failed to get teacher info:', err);
         router.push('/auth/teacher-signin');
       }
     };

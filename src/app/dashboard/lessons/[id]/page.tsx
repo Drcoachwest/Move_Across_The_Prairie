@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Lesson {
   id: string;
@@ -29,8 +29,9 @@ interface CurriculumResource {
   id: string;
   title: string;
   unit: string;
-  url?: string;
-  fileName?: string;
+  type?: string;
+  fileUrl?: string;
+  externalUrl?: string;
 }
 
 export default function LessonDetail({
@@ -39,10 +40,13 @@ export default function LessonDetail({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [resources, setResources] = useState<CurriculumResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [id, setId] = useState<string | null>(null);
 
@@ -108,6 +112,32 @@ export default function LessonDetail({
     }
   };
 
+  const handleCopyLesson = async () => {
+    if (!lesson) return;
+
+    setCopying(true);
+    setCopyError(null);
+    try {
+      const response = await fetch(`/api/lessons/${lesson.id}/copy`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        setCopyError(data.error || "Failed to copy lesson");
+        return;
+      }
+
+      const data = await response.json();
+      router.push(`/dashboard/lessons/${data.lessonId}?copied=1`);
+    } catch (copyErr) {
+      console.error("Error copying lesson:", copyErr);
+      setCopyError("An error occurred while copying the lesson.");
+    } finally {
+      setCopying(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -135,18 +165,54 @@ export default function LessonDetail({
     <div className="min-h-screen bg-gray-50">
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 py-12">
+        {searchParams.get("copied") === "1" && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800">Lesson copied successfully. You can edit this lesson now.</p>
+          </div>
+        )}
+        {searchParams.get("saved") === "1" && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800">Lesson saved successfully.</p>
+          </div>
+        )}
+        {copyError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">{copyError}</p>
+          </div>
+        )}
         <article className="bg-white rounded-lg shadow-md p-8 space-y-8">
           {/* Title & Metadata */}
           <div>
             <div className="flex items-start justify-between mb-4">
               <h1 className="text-3xl font-bold text-gray-900">{lesson.title}</h1>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 whitespace-nowrap ml-4"
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
+              <div className="flex items-center gap-2 ml-4">
+                <Link
+                  href={`/dashboard/lessons/${lesson.id}/print`}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium whitespace-nowrap"
+                >
+                  Print / Sub Plan
+                </Link>
+                <Link
+                  href={`/dashboard/lessons/${lesson.id}/edit`}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium whitespace-nowrap"
+                >
+                  Edit Lesson
+                </Link>
+                <button
+                  onClick={handleCopyLesson}
+                  disabled={copying}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 whitespace-nowrap"
+                >
+                  {copying ? "Copying..." : "Copy Lesson"}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 whitespace-nowrap"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
               <span className="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -251,11 +317,11 @@ export default function LessonDetail({
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">{resource.title}</p>
                         <p className="text-sm text-gray-600 mt-1">{resource.unit}</p>
-                        {(resource.url || resource.fileName) && (
+                        {(resource.externalUrl || resource.fileUrl) && (
                           <div className="mt-2">
-                            {resource.url && (
+                            {resource.externalUrl && (
                               <a
-                                href={resource.url}
+                                href={resource.externalUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
@@ -263,8 +329,8 @@ export default function LessonDetail({
                                 Open Resource →
                               </a>
                             )}
-                            {resource.fileName && (
-                              <p className="text-sm text-gray-600 mt-1">📄 {resource.fileName}</p>
+                            {resource.fileUrl && (
+                              <p className="text-sm text-gray-600 mt-1">📄 {resource.type}</p>
                             )}
                           </div>
                         )}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logAdminAction } from "@/lib/admin-logs";
 import { cookies } from "next/headers";
 
 /**
@@ -140,12 +141,22 @@ export async function PATCH(request: NextRequest) {
             activatedAt: new Date(),
           },
         });
+        await logAdminAction("teacher_activate", {
+          email,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          userAgent: request.headers.get("user-agent") || null,
+        });
         break;
 
       case "deactivate":
         await prisma.teacher.update({
           where: { email },
           data: { activated: false },
+        });
+        await logAdminAction("teacher_deactivate", {
+          email,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          userAgent: request.headers.get("user-agent") || null,
         });
         break;
 
@@ -154,6 +165,11 @@ export async function PATCH(request: NextRequest) {
           where: { email },
           data: { locked: true },
         });
+        await logAdminAction("teacher_lock", {
+          email,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          userAgent: request.headers.get("user-agent") || null,
+        });
         break;
 
       case "unlock":
@@ -161,10 +177,20 @@ export async function PATCH(request: NextRequest) {
           where: { email },
           data: { locked: false },
         });
+        await logAdminAction("teacher_unlock", {
+          email,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          userAgent: request.headers.get("user-agent") || null,
+        });
         break;
 
       case "resend-activation":
         // Email sending would be handled by a separate service
+        await logAdminAction("teacher_resend_activation", {
+          email,
+          ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+          userAgent: request.headers.get("user-agent") || null,
+        });
         return NextResponse.json({ success: true });
 
       default:
@@ -200,6 +226,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.teacher.delete({ where: { email } });
+
+    await logAdminAction("teacher_delete", {
+      email,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      userAgent: request.headers.get("user-agent") || null,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

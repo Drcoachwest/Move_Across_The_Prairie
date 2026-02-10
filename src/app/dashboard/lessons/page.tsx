@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Lesson {
   id: string;
@@ -15,10 +16,12 @@ interface Lesson {
 }
 
 export default function LessonBank() {
+  const router = useRouter();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,6 +104,29 @@ export default function LessonBank() {
       alert("An error occurred while deleting the lesson");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleCopyLesson = async (id: string) => {
+    setCopyingId(id);
+    try {
+      const response = await fetch(`/api/lessons/${id}/copy`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to copy lesson");
+        return;
+      }
+
+      const data = await response.json();
+      router.push(`/dashboard/lessons/${data.lessonId}?copied=1`);
+    } catch (error) {
+      console.error("Error copying lesson:", error);
+      alert("An error occurred while copying the lesson");
+    } finally {
+      setCopyingId(null);
     }
   };
 
@@ -293,6 +319,19 @@ export default function LessonBank() {
                     >
                       View
                     </Link>
+                    <Link
+                      href={`/dashboard/lessons/${lesson.id}/edit`}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => handleCopyLesson(lesson.id)}
+                      disabled={copyingId === lesson.id}
+                      className="px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 text-sm font-medium disabled:opacity-50"
+                    >
+                      {copyingId === lesson.id ? "Copying..." : "Copy"}
+                    </button>
                     <button
                       onClick={() => handleDelete(lesson.id, lesson.title)}
                       disabled={deletingId === lesson.id}

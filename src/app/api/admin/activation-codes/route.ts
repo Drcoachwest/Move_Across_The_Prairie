@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { logAdminAction } from "@/lib/admin-logs";
 import crypto from "crypto";
 
 export async function GET() {
@@ -46,6 +47,15 @@ export async function POST(request: NextRequest) {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         createdBy: "admin", // In real app, this would be the logged-in admin's username
       },
+    });
+
+    await logAdminAction("activation_code_create", {
+      code,
+      maxUses: maxUses || 1,
+      expiresAt: expiresAt || null,
+      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
+      userAgent: request.headers.get("user-agent") || null,
+      activationCodeId: newCode.id,
     });
 
     return NextResponse.json({

@@ -2,6 +2,8 @@
 
 A secure web application for teachers to access curriculum materials and manage lesson planning.
 
+<!-- TODO: Tests will be added during pilot hardening phase -->
+
 ## Features
 
 - **Email Authentication**: Sign in with @gpisd.org email addresses only

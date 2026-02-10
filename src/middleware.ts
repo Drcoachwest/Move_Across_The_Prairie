@@ -17,8 +17,13 @@ export function middleware(request: NextRequest) {
     const teacherSession = request.cookies.get("teacher_session");
     const tempEmail = request.cookies.get("temp_teacher_email");
 
+    console.log(`[Middleware] Teacher route accessed: ${pathname}`);
+    console.log(`[Middleware] teacher_session: ${teacherSession ? "present" : "missing"}`);
+    console.log(`[Middleware] temp_teacher_email: ${tempEmail ? "present" : "missing"}`);
+
     // If no session and no temp setup cookie, redirect to signin
     if (!teacherSession && !tempEmail) {
+      console.log(`[Middleware] Redirecting to /auth/teacher-signin`);
       return NextResponse.redirect(new URL("/auth/teacher-signin", request.url));
     }
   }
