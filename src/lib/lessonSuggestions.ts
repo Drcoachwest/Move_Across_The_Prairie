@@ -4,6 +4,11 @@ interface DraftVariant {
   modifications: string;
   assessment: string;
   closure: string;
+  skillFocus: string;
+  progressionLevel: string;
+  teacherLookFors: string;
+  commonMistakes: string;
+  coachingLanguage: string;
   notes?: string;
   titleSuggestion?: string;
 }
@@ -33,6 +38,21 @@ type BandSuggestions = Record<string, SuggestionPool>;
 
 type SuggestionsByBand = Record<string, BandSuggestions>;
 
+type TeacherSupportPool = {
+  lookFors: string[];
+  mistakes: string[];
+  coaching: string[];
+};
+
+export interface CoachingSuggestionInput {
+  band: string;
+  unit: string;
+  durationMinutes: number;
+  gradeGroup?: string;
+  skillFocus?: string;
+  progressionLevel?: string;
+}
+
 export function normalizeUnit(unit: string): string {
   return unit
     .toLowerCase()
@@ -59,6 +79,208 @@ const UNIT_KEY_MAP: Record<string, string> = {
   [normalizeUnit('Culminating Experiences')]: 'Culminating Experiences',
   [normalizeUnit('Games and Cooperation I')]: 'Games & Cooperation I',
   [normalizeUnit('Games and Cooperation II')]: 'Games & Cooperation II',
+};
+
+const SKILL_FOCUS_BY_UNIT: Record<string, string> = {
+  [normalizeUnit('Body Awareness')]: 'Balance/Body Control',
+  [normalizeUnit('Spatial Awareness')]: 'Spatial Awareness',
+  [normalizeUnit('Locomotor Skills I')]: 'Locomotor',
+  [normalizeUnit('Locomotor Skills II')]: 'Locomotor',
+  [normalizeUnit('Non-Locomotor Movement')]: 'Balance/Body Control',
+  [normalizeUnit('Games & Cooperation I')]: 'Teamwork',
+  [normalizeUnit('Games & Cooperation II')]: 'Teamwork',
+  [normalizeUnit('Rhythms & Creative Movement')]: 'Rhythm/Creative',
+  [normalizeUnit('Fitness Foundations')]: 'Fitness',
+  [normalizeUnit('Skill Review & Reinforcement')]: 'Other',
+  [normalizeUnit('Manipulative Skills I')]: 'Throwing/Catching',
+  [normalizeUnit('Manipulative Skills II')]: 'Manipulative/Striking',
+  [normalizeUnit('Culminating Experiences')]: 'Teamwork',
+  [normalizeUnit('Games and Cooperation I')]: 'Teamwork',
+  [normalizeUnit('Games and Cooperation II')]: 'Teamwork',
+};
+
+const DEFAULT_TEACHER_SUPPORT: TeacherSupportPool = {
+  lookFors: [
+    'Students stay in their personal space and move safely.',
+    'Students use the correct movement pattern or skill cue.',
+    'Students can describe the objective in their own words.',
+  ],
+  mistakes: [
+    'Eyes down or not scanning for open space.',
+    'Rushing the movement and losing control or balance.',
+    'Forgetting the key cue during transitions.',
+  ],
+  coaching: [
+    'Eyes up, find space.',
+    'Control first, then speed.',
+    'Show me the key cue.',
+  ],
+};
+
+const GENERIC_COACHING_CUES = [
+  'Eyes up and scan.',
+  'Find open space.',
+  'Control before speed.',
+  'Show the key cue.',
+  'Breathe and reset.',
+  'Move with purpose.',
+  'Soft hands and quiet feet.',
+];
+
+const TEACHER_SUPPORT_BY_FOCUS: Record<string, TeacherSupportPool> = {
+  'Spatial Awareness': {
+    lookFors: [
+      'Students change direction without bumping others.',
+      'Students can identify open space before moving.',
+      'Students maintain safe spacing in general space.',
+    ],
+    mistakes: [
+      'Moving too fast for the space size.',
+      'Following others instead of scanning for space.',
+      'Stopping abruptly without awareness of others.',
+    ],
+    coaching: [
+      'Find open space.',
+      'Keep your bubble safe.',
+      'Eyes up and move with control.',
+    ],
+  },
+  Locomotor: {
+    lookFors: [
+      'Students show the correct locomotor pattern on cue.',
+      'Students transition smoothly between skills.',
+      'Students land softly and with control.',
+    ],
+    mistakes: [
+      'Feet too close together on jumps.',
+      'Arms not helping with balance or rhythm.',
+      'Losing form when changing directions.',
+    ],
+    coaching: [
+      'Light feet, quiet landings.',
+      'Use your arms for balance.',
+      'Show the pattern clearly.',
+    ],
+  },
+  'Manipulative/Striking': {
+    lookFors: [
+      'Students contact the object with control.',
+      'Students use a ready position between attempts.',
+      'Students track the object with their eyes.',
+    ],
+    mistakes: [
+      'Swinging too hard without control.',
+      'Eyes off the object during contact.',
+      'Feet not set before striking.',
+    ],
+    coaching: [
+      'Eyes on the object.',
+      'Soft hands, smooth swing.',
+      'Ready position after contact.',
+    ],
+  },
+  Dribbling: {
+    lookFors: [
+      'Students keep the object close to their body.',
+      'Students use fingertips and control the bounce.',
+      'Students scan while moving.',
+    ],
+    mistakes: [
+      'Pushing the ball too far ahead.',
+      'Watching the ball the whole time.',
+      'Using the palm instead of fingertips.',
+    ],
+    coaching: [
+      'Soft fingertips.',
+      'Keep it close.',
+      'Eyes up when you can.',
+    ],
+  },
+  'Throwing/Catching': {
+    lookFors: [
+      'Step and follow through on throws.',
+      'Hands ready in a target position for catches.',
+      'Eyes track the object into the hands.',
+    ],
+    mistakes: [
+      'Throwing without stepping.',
+      'Arms stiff when receiving.',
+      'Looking away before the catch.',
+    ],
+    coaching: [
+      'Step to your target.',
+      'Soft hands, watch it in.',
+      'Follow through.',
+    ],
+  },
+  Fitness: {
+    lookFors: [
+      'Students use correct form on each exercise.',
+      'Students pace themselves appropriately.',
+      'Students maintain a steady effort.',
+    ],
+    mistakes: [
+      'Rushing and sacrificing form.',
+      'Holding breath during effort.',
+      'Stopping without rest cues.',
+    ],
+    coaching: [
+      'Form first.',
+      'Steady pace.',
+      'Breathe and reset.',
+    ],
+  },
+  Teamwork: {
+    lookFors: [
+      'Students communicate with partners.',
+      'Students share space and equipment fairly.',
+      'Students support teammates during tasks.',
+    ],
+    mistakes: [
+      'Working alone instead of with the group.',
+      'Not listening to partner cues.',
+      'Rushing without a plan.',
+    ],
+    coaching: [
+      'Talk to your partner.',
+      'Share the space.',
+      'Plan before you move.',
+    ],
+  },
+  'Rhythm/Creative': {
+    lookFors: [
+      'Students move with the beat.',
+      'Students use different levels and shapes.',
+      'Students show creativity in movement choices.',
+    ],
+    mistakes: [
+      'Moving off the beat.',
+      'Repeating one movement only.',
+      'Staying at one level.',
+    ],
+    coaching: [
+      'Find the beat.',
+      'Show me a new shape.',
+      'Change levels.',
+    ],
+  },
+  'Balance/Body Control': {
+    lookFors: [
+      'Students hold balance with control.',
+      'Students use core strength to stabilize.',
+      'Students transition smoothly between shapes.',
+    ],
+    mistakes: [
+      'Leaning without control.',
+      'Rushing through balance holds.',
+      'Feet too narrow for stability.',
+    ],
+    coaching: [
+      'Freeze and hold.',
+      'Strong core.',
+      'Slow and steady.',
+    ],
+  },
 };
 
 const suggestions: SuggestionsByBand = {
@@ -515,6 +737,12 @@ const selectOptions = (options: string[], count: number, rand: () => number) => 
   return selected;
 };
 
+const toBullets = (items: string[]) => {
+  const cleaned = items.map((item) => item.trim()).filter(Boolean);
+  if (cleaned.length === 0) return '';
+  return cleaned.map((item) => `- ${item}`).join('\n');
+};
+
 const adjustForDuration = (text: string, durationMinutes: number) => {
   if (!text) return '';
   if (durationMinutes <= 30) {
@@ -541,6 +769,50 @@ const resolveUnitKey = (band: string, unit: string) => {
 
   return matchedKey || '';
 };
+
+const resolveSkillFocus = (band: string, unit: string) => {
+  const normalizedUnit = normalizeUnit(unit);
+  if (SKILL_FOCUS_BY_UNIT[normalizedUnit]) {
+    return SKILL_FOCUS_BY_UNIT[normalizedUnit];
+  }
+
+  if (band === 'MIDDLE' || band === 'HIGH') {
+    return 'Teamwork';
+  }
+
+  return 'Other';
+};
+
+const resolveProgressionLevel = (durationMinutes: number) => {
+  if (durationMinutes <= 30) return 'Intro';
+  if (durationMinutes <= 45) return 'Development';
+  if (durationMinutes <= 60) return 'Application';
+  return 'Assessment';
+};
+
+const getTeacherSupportPool = (skillFocus: string): TeacherSupportPool => {
+  return TEACHER_SUPPORT_BY_FOCUS[skillFocus] || DEFAULT_TEACHER_SUPPORT;
+};
+
+export function getCoachingSuggestions(input: CoachingSuggestionInput): string[] {
+  const hasSkillFocus = input.skillFocus && input.skillFocus.trim();
+  const hasUnit = input.unit && input.unit.trim();
+
+  if (hasSkillFocus) {
+    const pool = getTeacherSupportPool(input.skillFocus.trim());
+    const combined = [...pool.coaching, ...DEFAULT_TEACHER_SUPPORT.coaching];
+    return Array.from(new Set(combined.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
+  }
+
+  if (hasUnit) {
+    const focusFromUnit = resolveSkillFocus(input.band, input.unit.trim());
+    const pool = getTeacherSupportPool(focusFromUnit);
+    const combined = [...pool.coaching, ...DEFAULT_TEACHER_SUPPORT.coaching];
+    return Array.from(new Set(combined.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
+  }
+
+  return Array.from(new Set(GENERIC_COACHING_CUES.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
+}
 
 const getSuggestionPool = (band: string, unit: string) => {
   const bandSuggestions = suggestions[band] || suggestions.ELEMENTARY;
@@ -569,12 +841,18 @@ export function generateDraftVariants(
   const { band, unit, durationMinutes } = input;
   const { pool, unitKey, usedFallback } = getSuggestionPool(band, unit);
   const rand = createSeededRandom(seed);
+  const skillFocus = resolveSkillFocus(band, unit);
+  const progressionLevel = resolveProgressionLevel(durationMinutes);
+  const teacherSupportPool = getTeacherSupportPool(skillFocus);
 
   const warmUps = selectOptions(pool.warmUps, count, rand);
   const mainActivities = selectOptions(pool.mainActivities, count, rand);
   const modifications = selectOptions(pool.modifications, count, rand);
   const assessments = selectOptions(pool.assessments, count, rand);
   const closures = selectOptions(pool.closures, count, rand);
+  const lookFors = selectOptions(teacherSupportPool.lookFors, count * 2, rand);
+  const mistakes = selectOptions(teacherSupportPool.mistakes, count * 2, rand);
+  const coaching = selectOptions(teacherSupportPool.coaching, count * 2, rand);
 
   const variants = Array.from({ length: count }, (_, index) => {
     const warmUp = adjustForDuration(warmUps[index], durationMinutes).trim() || 'Warm-up activity.';
@@ -585,6 +863,9 @@ export function generateDraftVariants(
     const assessment =
       adjustForDuration(assessments[index], durationMinutes).trim() || 'Assessment and observation.';
     const closure = adjustForDuration(closures[index], durationMinutes).trim() || 'Closure and reflection.';
+    const lookForItems = [lookFors[index * 2], lookFors[index * 2 + 1]].filter(Boolean) as string[];
+    const mistakeItems = [mistakes[index * 2], mistakes[index * 2 + 1]].filter(Boolean) as string[];
+    const coachingItems = [coaching[index * 2], coaching[index * 2 + 1]].filter(Boolean) as string[];
 
     return {
       warmUp,
@@ -592,6 +873,11 @@ export function generateDraftVariants(
       modifications: modification,
       assessment,
       closure,
+      skillFocus,
+      progressionLevel,
+      teacherLookFors: toBullets(lookForItems.length ? lookForItems : DEFAULT_TEACHER_SUPPORT.lookFors.slice(0, 2)),
+      commonMistakes: toBullets(mistakeItems.length ? mistakeItems : DEFAULT_TEACHER_SUPPORT.mistakes.slice(0, 2)),
+      coachingLanguage: toBullets(coachingItems.length ? coachingItems : DEFAULT_TEACHER_SUPPORT.coaching.slice(0, 2)),
       titleSuggestion: unitKey ? `${unitKey} - Lesson` : undefined,
     };
   });

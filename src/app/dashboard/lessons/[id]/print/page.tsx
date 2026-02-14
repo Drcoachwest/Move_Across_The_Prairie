@@ -19,6 +19,11 @@ interface Lesson {
   assessment: string;
   closure: string;
   notes?: string;
+  skillFocus?: string;
+  progressionLevel?: string;
+  teacherLookFors?: string;
+  commonMistakes?: string;
+  coachingLanguage?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +48,8 @@ export default function PrintLessonPage({
   const [resources, setResources] = useState<CurriculumResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [includeTeacherSupport, setIncludeTeacherSupport] = useState(true);
+  const [includeResources, setIncludeResources] = useState(true);
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -141,7 +148,7 @@ export default function PrintLessonPage({
 
       <div className="print-container max-w-5xl mx-auto px-6 py-8">
         {/* Screen-only controls */}
-        <div className="no-print mb-6 flex gap-4">
+        <div className="no-print mb-6 flex flex-wrap gap-4 items-center">
           <button
             onClick={handlePrint}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
@@ -154,6 +161,22 @@ export default function PrintLessonPage({
           >
             Back to Lesson
           </button>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={includeTeacherSupport}
+              onChange={(e) => setIncludeTeacherSupport(e.target.checked)}
+            />
+            Include Teacher Support Tools
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={includeResources}
+              onChange={(e) => setIncludeResources(e.target.checked)}
+            />
+            Include Resources List
+          </label>
         </div>
 
         {/* Print content */}
@@ -207,6 +230,44 @@ export default function PrintLessonPage({
             <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{lesson.mainActivity}</p>
           </section>
 
+          {/* Teacher Support Tools */}
+          {includeTeacherSupport &&
+            (lesson.skillFocus ||
+              lesson.progressionLevel ||
+              lesson.teacherLookFors ||
+              lesson.commonMistakes ||
+              lesson.coachingLanguage) && (
+              <section className="print-section mb-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Teacher Support Tools</h2>
+                <div className="space-y-3 text-gray-800">
+                  {lesson.skillFocus && (
+                    <p><strong>Skill Focus:</strong> {lesson.skillFocus}</p>
+                  )}
+                  {lesson.progressionLevel && (
+                    <p><strong>Progression Level:</strong> {lesson.progressionLevel}</p>
+                  )}
+                  {lesson.teacherLookFors && (
+                    <div>
+                      <p className="font-semibold">Teacher Look-Fors</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{lesson.teacherLookFors}</p>
+                    </div>
+                  )}
+                  {lesson.commonMistakes && (
+                    <div>
+                      <p className="font-semibold">Common Mistakes</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{lesson.commonMistakes}</p>
+                    </div>
+                  )}
+                  {lesson.coachingLanguage && (
+                    <div>
+                      <p className="font-semibold">Coaching Language</p>
+                      <p className="whitespace-pre-wrap leading-relaxed">{lesson.coachingLanguage}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
           {/* Modifications */}
           {lesson.modifications && (
             <section className="print-section mb-6">
@@ -236,7 +297,7 @@ export default function PrintLessonPage({
           )}
 
           {/* Curriculum Resources */}
-          {resources.length > 0 && (
+          {includeResources && resources.length > 0 && (
             <section className="print-section mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-2">Curriculum Resources</h2>
               <ul className="space-y-2">
