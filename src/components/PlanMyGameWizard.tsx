@@ -369,7 +369,7 @@ export default function PlanMyGameWizard({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Describe your own activity {isCustomActivityRequired && <span className="text-red-500">*</span>}
+                Additional Details for AI (Optional) {isCustomActivityRequired && <span className="text-red-500">*</span>}
               </label>
               <textarea
                 value={customActivityIdea}
@@ -377,7 +377,7 @@ export default function PlanMyGameWizard({
                   setCustomActivityIdea(e.target.value);
                   if (activityError) setActivityError('');
                 }}
-                placeholder="Example: I want students moving safely in open space while avoiding collisions…"
+                placeholder="Add any specific constraints, equipment, class size, or rules you want included in the lesson. Example: 3v3 soccer, 25 students, limited space, focus on communication."
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />

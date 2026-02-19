@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PlanMyGameWizard from '@/components/PlanMyGameWizard';
-import { generateDraftVariants, getCoachingSuggestions } from '@/lib/lessonSuggestions';
+import { getCoachingSuggestions } from '@/lib/lessonSuggestions';
 import type { ChatGptLessonData } from '@/lib/planMyGameChatgpt';
 import { YAG_UNITS } from '@/lib/yagUnits';
 import {
@@ -244,6 +244,9 @@ export default function LessonBuilderPage() {
 
   // Reset form
   const handleReset = () => {
+    if (!window.confirm('Reset this lesson? This will clear all fields.')) {
+      return;
+    }
     setForm({
       title: '',
       band: 'ELEMENTARY',
@@ -467,31 +470,6 @@ export default function LessonBuilderPage() {
     });
   };
 
-  const handleQuickFill = () => {
-    if (form.objectives.trim() && form.mainActivity.trim()) return;
-    if (!actualUnit.trim()) return;
-    const draftResult = generateDraftVariants(
-      {
-        band: form.band,
-        gradeGroup: form.gradeGroup,
-        unit: actualUnit,
-        durationMinutes: form.durationMinutes,
-      },
-      1,
-      Date.now()
-    );
-    const draft = draftResult.variants[0];
-    setForm((prev) => ({
-      ...prev,
-      objectives: prev.objectives.trim()
-        ? prev.objectives
-        : draft.skillFocus
-          ? `Students will demonstrate ${draft.skillFocus.toLowerCase()} skills at the ${draft.progressionLevel.toLowerCase()} level.`
-          : `Students will practice the key skills for ${actualUnit}.`,
-      mainActivity: prev.mainActivity.trim() ? prev.mainActivity : draft.mainActivity,
-    }));
-  };
-
   const handlePrintSubPlan = () => {
     window.print();
   };
@@ -552,7 +530,7 @@ export default function LessonBuilderPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Lesson Builder</h1>
         <p className="text-gray-600">Create PE lessons with guided suggestions</p>
@@ -614,9 +592,32 @@ export default function LessonBuilderPage() {
         </div>
       )}
 
+      <div className="bg-white rounded-lg shadow mb-6 p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Start with AI (Optional)</h2>
+            <p className="text-sm text-gray-600">
+              Generate a complete first draft and auto-fill the lesson fields. You can edit everything after import.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => setShowPlanMyGame(true)}
+              disabled={saving}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+            >
+              AI Lesson Builder
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 1: LESSON SETUP */}
       <div className="bg-white rounded-lg shadow mb-8 p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Section 1: Lesson Setup</h2>
+        <p className="text-sm text-gray-600 mb-6">
+          Prefer to build it yourself? Fill out Section 1 and Section 2 below.
+        </p>
 
         {/* Title */}
         <div className="mb-6">
@@ -766,43 +767,6 @@ export default function LessonBuilderPage() {
           )}
         </div>
 
-        {/* Section 1 Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setShowPlanMyGame(true)}
-            disabled={saving}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
-          >
-            AI Lesson Builder
-          </button>
-          <button
-            onClick={handleQuickFill}
-            disabled={saving}
-            className="px-6 py-3 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50 font-medium"
-          >
-            Quick Fill (Minimum Required)
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={saving}
-            className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 font-medium"
-          >
-            Reset
-          </button>
-          <button
-            onClick={handleSaveLesson}
-            disabled={isSaveDisabled}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          <button
-            onClick={handlePrintSubPlan}
-            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-          >
-            Print / Sub Plan
-          </button>
-        </div>
       </div>
 
       {/* SECTION 2: LESSON CONTENT */}
@@ -1307,8 +1271,38 @@ export default function LessonBuilderPage() {
 
       </div>
 
+      {/* Bottom Action Bar */}
+      <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <button
+                onClick={handleSaveLesson}
+                disabled={isSaveDisabled}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {saving ? 'Saving...' : 'Save Lesson'}
+              </button>
+              <button
+                onClick={handlePrintSubPlan}
+                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Print / Sub Plan
+              </button>
+            </div>
+            <button
+              onClick={handleReset}
+              disabled={saving}
+              className="px-6 py-3 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 font-medium"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Navigation */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 mt-6">
         <Link
           href="/dashboard/lessons"
           className="flex-1 text-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
