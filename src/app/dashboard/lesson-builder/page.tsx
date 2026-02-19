@@ -1,10 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import PlanMyGameWizard from '@/components/PlanMyGameWizard';
 import { generateDraftVariants, getCoachingSuggestions } from '@/lib/lessonSuggestions';
+import type { ChatGptLessonData } from '@/lib/planMyGameChatgpt';
 import { YAG_UNITS } from '@/lib/yagUnits';
+import {
+  getSkillFocusOptionsForUnit,
+  isSkillFocusValidForUnit,
+} from '@/lib/curriculum/skillFocusMap';
 
 const GRADE_GROUPS: Record<string, string[]> = {
   ELEMENTARY: ['K-2', '3-5'],
@@ -13,19 +19,6 @@ const GRADE_GROUPS: Record<string, string[]> = {
 };
 
 const DURATIONS = [30, 45, 60, 90];
-
-const SKILL_FOCUS_OPTIONS = [
-  'Spatial Awareness',
-  'Locomotor',
-  'Manipulative/Striking',
-  'Dribbling',
-  'Throwing/Catching',
-  'Fitness',
-  'Teamwork',
-  'Rhythm/Creative',
-  'Balance/Body Control',
-  'Other',
-];
 
 const PROGRESSION_LEVEL_OPTIONS = ['Intro', 'Development', 'Application', 'Assessment'];
 
@@ -55,21 +48,6 @@ interface FormErrors {
   [key: string]: string;
 }
 
-interface DraftVariant {
-  warmUp: string;
-  mainActivity: string;
-  modifications: string;
-  assessment: string;
-  closure: string;
-  skillFocus: string;
-  progressionLevel: string;
-  teacherLookFors: string;
-  commonMistakes: string;
-  coachingLanguage: string;
-  notes?: string;
-  titleSuggestion?: string;
-}
-
 export default function LessonBuilderPage() {
   const router = useRouter();
   const [form, setForm] = useState<FormData>({
@@ -96,14 +74,13 @@ export default function LessonBuilderPage() {
 
   const [units, setUnits] = useState<string[]>([]);
   const [showCustomUnit, setShowCustomUnit] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState('');
-  const [draftOptions, setDraftOptions] = useState<DraftVariant[]>([]);
-  const [draftUnitFocus, setDraftUnitFocus] = useState('');
-  const [draftUsedFallback, setDraftUsedFallback] = useState(false);
   const [lessonMode, setLessonMode] = useState<'quick' | 'high'>('quick');
+  const [showPlanMyGame, setShowPlanMyGame] = useState(false);
+  const [skillFocusSelection, setSkillFocusSelection] = useState('');
+  const [customSkillFocus, setCustomSkillFocus] = useState('');
   const [openPanels, setOpenPanels] = useState({
     warmUpClosure: false,
     instructionalQuality: false,
@@ -151,6 +128,36 @@ export default function LessonBuilderPage() {
 
     fetchData();
   }, []);
+
+  const actualUnitForSkill = showCustomUnit ? form.customUnit : form.unit;
+  const skillFocusOptions = useMemo(
+    () => getSkillFocusOptionsForUnit(actualUnitForSkill),
+    [actualUnitForSkill]
+  );
+  const isSkillFocusValid = useMemo(
+    () => isSkillFocusValidForUnit(actualUnitForSkill, form.skillFocus),
+    [actualUnitForSkill, form.skillFocus]
+  );
+
+  useEffect(() => {
+    if (form.skillFocus && !isSkillFocusValid) {
+      if (skillFocusSelection === 'Other') {
+        setCustomSkillFocus(form.skillFocus);
+        return;
+      }
+      setSkillFocusSelection('__custom__');
+      setCustomSkillFocus(form.skillFocus);
+      return;
+    }
+    if (form.skillFocus && isSkillFocusValid) {
+      setSkillFocusSelection(form.skillFocus);
+      setCustomSkillFocus('');
+      return;
+    }
+    if (!form.skillFocus && skillFocusSelection !== 'Other') {
+      setSkillFocusSelection('');
+    }
+  }, [form.skillFocus, isSkillFocusValid, skillFocusSelection]);
 
   // Handle band change - auto-set grade for Middle/High, clear unit
   const handleBandChange = (newBand: string) => {
@@ -218,14 +225,6 @@ export default function LessonBuilderPage() {
     setForm((prev) => ({ ...prev, [field]: '' }));
   };
 
-  const previewBullets = (text: string, max = 2) => {
-    const bullets = text
-      .split('\n')
-      .map((line) => line.replace(/^[-•\s]+/, '').trim())
-      .filter(Boolean);
-    return bullets.slice(0, max);
-  };
-
   // Handle unit change
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -241,70 +240,6 @@ export default function LessonBuilderPage() {
   // Handle custom unit input
   const handleCustomUnitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, customUnit: e.target.value }));
-  };
-
-  const generateDraftOptions = (seed = Date.now()) => {
-    const actualUnit = showCustomUnit ? form.customUnit : form.unit;
-
-    const newErrors: FormErrors = {};
-    if (!form.title.trim()) newErrors.title = 'Title is required';
-    if (!actualUnit.trim()) newErrors.unit = 'Unit is required';
-    if (!form.objectives.trim()) newErrors.objectives = 'Objectives are required';
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setLoading(true);
-    const draftResult = generateDraftVariants(
-      {
-        band: form.band,
-        gradeGroup: form.gradeGroup,
-        unit: actualUnit,
-        durationMinutes: form.durationMinutes,
-      },
-      3,
-      seed
-    );
-
-    setDraftOptions(draftResult.variants);
-    setDraftUnitFocus(
-      draftResult.unitKey && draftResult.unitKey !== '__fallback__' ? draftResult.unitKey : actualUnit
-    );
-    setDraftUsedFallback(draftResult.usedFallback);
-    setErrors({});
-    setLoading(false);
-  };
-
-  const handleGenerateDraft = () => {
-    generateDraftOptions();
-  };
-
-  const handleRegenerateDrafts = () => {
-    generateDraftOptions(Date.now());
-  };
-
-  const handleUseDraft = (draft: DraftVariant) => {
-    setForm((prev) => ({
-      ...prev,
-      unit: showCustomUnit ? '' : prev.unit,
-      customUnit: showCustomUnit ? form.customUnit : prev.customUnit,
-      warmUp: draft.warmUp,
-      mainActivity: draft.mainActivity,
-      modifications: draft.modifications || '',
-      assessment: draft.assessment,
-      closure: draft.closure,
-      skillFocus: draft.skillFocus || prev.skillFocus,
-      progressionLevel: draft.progressionLevel || prev.progressionLevel,
-      teacherLookFors: draft.teacherLookFors || prev.teacherLookFors,
-      commonMistakes: draft.commonMistakes || prev.commonMistakes,
-      coachingLanguage: draft.coachingLanguage || prev.coachingLanguage,
-      notes: draft.notes || prev.notes,
-      title: prev.title.trim() ? prev.title : draft.titleSuggestion || prev.title,
-    }));
-
-    setErrors({});
   };
 
   // Reset form
@@ -462,7 +397,6 @@ export default function LessonBuilderPage() {
   const availableResourceGrades = getAvailableResourceGrades();
   const filteredResources = getFilteredResources();
   const selectedResources = allResources.filter((r) => selectedResourceIds.includes(r.id));
-  const previewText = (text: string) => (text.length > 120 ? `${text.slice(0, 120)}…` : text);
   const unitOptions = form.band === 'ELEMENTARY' ? YAG_UNITS.ELEMENTARY['K-2'] : units;
 
   const actualUnit = showCustomUnit ? form.customUnit : form.unit;
@@ -558,46 +492,63 @@ export default function LessonBuilderPage() {
     }));
   };
 
-  const handleAutoFillRemainingSections = () => {
-    if (!actualUnit.trim()) return;
-    const draft = draftOptions[0]
-      ? draftOptions[0]
-      : generateDraftVariants(
-          {
-            band: form.band,
-            gradeGroup: form.gradeGroup,
-            unit: actualUnit || 'General PE',
-            durationMinutes: form.durationMinutes,
-          },
-          1,
-          Date.now()
-        ).variants[0];
+  const handlePrintSubPlan = () => {
+    window.print();
+  };
 
-    const baseSkillFocus = form.skillFocus.trim() ? form.skillFocus : draft.skillFocus;
-    const equipmentSuggestion = (() => {
-      if (baseSkillFocus === 'Spatial Awareness') return 'Cones, poly spots, boundary lines.';
-      if (baseSkillFocus === 'Locomotor') return 'Cones, poly spots, floor lines.';
-      if (baseSkillFocus === 'Throwing/Catching') return 'Soft balls, targets, cones.';
-      if (baseSkillFocus === 'Dribbling') return 'Basketballs or playground balls, cones.';
-      if (baseSkillFocus === 'Fitness') return 'Mats, timers, cones.';
-      if (baseSkillFocus === 'Teamwork') return 'Cones, pinnies, small equipment.';
-      return 'Cones, poly spots, and basic equipment.';
-    })();
+  const handleImportPlan = (
+    plan: ChatGptLessonData,
+    context: {
+      gradeGroup: 'K-2' | '3-5';
+      durationMinutes: number;
+      unit: string;
+      skillFocus?: string;
+    },
+    options: { overwriteExisting: boolean }
+  ) => {
+    const nextUnit = context.unit.trim();
+    if (!nextUnit) {
+      setErrors({ unit: 'Unit is required' });
+      return;
+    }
 
+    const shouldOverwrite = options.overwriteExisting;
+
+    const applyValue = (current: string, next?: string) => {
+      if (!next || !next.trim()) return current;
+      if (current.trim() && !shouldOverwrite) return current;
+      return next;
+    };
+
+    setShowCustomUnit(false);
     setForm((prev) => ({
       ...prev,
-      warmUp: prev.warmUp.trim() ? prev.warmUp : draft.warmUp,
-      closure: prev.closure.trim() ? prev.closure : draft.closure,
-      assessment: prev.assessment.trim() ? prev.assessment : draft.assessment,
-      equipment: prev.equipment.trim() ? prev.equipment : equipmentSuggestion,
-      modifications: prev.modifications.trim() ? prev.modifications : draft.modifications,
-      notes: prev.notes.trim() ? prev.notes : draft.notes || prev.notes,
-      teacherLookFors: prev.teacherLookFors.trim() ? prev.teacherLookFors : draft.teacherLookFors,
-      commonMistakes: prev.commonMistakes.trim() ? prev.commonMistakes : draft.commonMistakes,
-      coachingLanguage: prev.coachingLanguage.trim() ? prev.coachingLanguage : draft.coachingLanguage,
-      skillFocus: prev.skillFocus.trim() ? prev.skillFocus : draft.skillFocus,
-      progressionLevel: prev.progressionLevel.trim() ? prev.progressionLevel : draft.progressionLevel,
+      band: 'ELEMENTARY',
+      gradeGroup: context.gradeGroup,
+      durationMinutes: context.durationMinutes,
+      unit: nextUnit,
+      customUnit: '',
+      title: applyValue(prev.title, plan.title),
+      objectives: applyValue(prev.objectives, plan.objectives),
+      mainActivity: applyValue(prev.mainActivity, plan.mainActivity),
+      warmUp: applyValue(prev.warmUp, plan.warmUp),
+      assessment: applyValue(prev.assessment, plan.assessment),
+      closure: applyValue(prev.closure, plan.closure),
+      equipment: applyValue(prev.equipment, plan.equipment),
+      modifications: applyValue(prev.modifications, plan.modifications),
+      notes: applyValue(prev.notes, plan.notes),
+      skillFocus: applyValue(prev.skillFocus, plan.skillFocus),
+      progressionLevel: applyValue(prev.progressionLevel, plan.progressionLevel),
+      teacherLookFors: applyValue(prev.teacherLookFors, plan.teacherLookFors),
+      commonMistakes: applyValue(prev.commonMistakes, plan.commonMistakes),
+      coachingLanguage: applyValue(prev.coachingLanguage, plan.coachingLanguage),
     }));
+
+    setLessonMode('high');
+    setErrors({});
+    setSuccessMessage('Plan imported. Review and save.');
+    setShowPlanMyGame(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -646,9 +597,6 @@ export default function LessonBuilderPage() {
             <span className="ml-2 font-medium">{qualityStatus}</span>
           </span>
         </div>
-        <p className="mt-2 text-sm text-gray-500">
-          This score reflects instructional completeness and supports consistent PE instruction across campuses.
-        </p>
         <p className="mt-2 text-sm text-gray-500">
           Unit Context: Unit Focus: {unitFocusLabel} | Skill Focus: {skillFocusLabel} | Lesson Position: {progressionLabel}
         </p>
@@ -819,13 +767,13 @@ export default function LessonBuilderPage() {
         </div>
 
         {/* Section 1 Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleGenerateDraft}
+            onClick={() => setShowPlanMyGame(true)}
             disabled={saving}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >
-            {loading ? 'Generating...' : 'Generate Draft Options'}
+            AI Lesson Builder
           </button>
           <button
             onClick={handleQuickFill}
@@ -834,15 +782,6 @@ export default function LessonBuilderPage() {
           >
             Quick Fill (Minimum Required)
           </button>
-          {lessonMode === 'high' && (
-            <button
-              onClick={handleAutoFillRemainingSections}
-              disabled={saving}
-              className="px-6 py-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg hover:bg-emerald-100 disabled:opacity-50 font-medium"
-            >
-              Auto-Fill Remaining Sections
-            </button>
-          )}
           <button
             onClick={handleReset}
             disabled={saving}
@@ -850,90 +789,21 @@ export default function LessonBuilderPage() {
           >
             Reset
           </button>
-          {draftOptions.length > 0 && (
-            <button
-              onClick={handleRegenerateDrafts}
-              disabled={saving}
-              className="md:col-span-2 px-6 py-3 bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50 font-medium"
-            >
-              Regenerate
-            </button>
-          )}
+          <button
+            onClick={handleSaveLesson}
+            disabled={isSaveDisabled}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            onClick={handlePrintSubPlan}
+            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+          >
+            Print / Sub Plan
+          </button>
         </div>
       </div>
-
-      {draftOptions.length > 0 && (
-        <div className="bg-white rounded-lg shadow mb-8 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Draft Options</h2>
-            <p className="text-sm text-gray-500">Choose a draft to start editing</p>
-          </div>
-          <div className="mb-4">
-            <p className="text-sm text-gray-700">
-              Unit focus: <span className="font-medium text-gray-900">{draftUnitFocus || 'General PE'}</span>
-            </p>
-            {draftUsedFallback && (
-              <p className="text-sm text-amber-700 mt-1">
-                General PE template used (no unit-specific template found).
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {draftOptions.map((draft, index) => (
-              <div key={`draft-${index}`} className="border border-gray-200 rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Draft {String.fromCharCode(65 + index)}</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {draft.skillFocus && (
-                    <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
-                      {draft.skillFocus}
-                    </span>
-                  )}
-                  {draft.progressionLevel && (
-                    <span className="px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full">
-                      {draft.progressionLevel}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-3 text-sm text-gray-700">
-                  <div>
-                    <p className="font-medium text-gray-900">Warm Up</p>
-                    <p>{previewText(draft.warmUp)}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Main Activity</p>
-                    <p>{previewText(draft.mainActivity)}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Assessment</p>
-                    <p>{previewText(draft.assessment)}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Teacher Support</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {previewBullets(draft.teacherLookFors).map((item, itemIndex) => (
-                        <li key={`lookfor-${itemIndex}`}>{item}</li>
-                      ))}
-                      {previewBullets(draft.coachingLanguage, 1).map((item, itemIndex) => (
-                        <li key={`coach-${itemIndex}`} className="text-gray-600">
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleUseDraft(draft)}
-                  className="w-full px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium"
-                >
-                  Use this draft
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* SECTION 2: LESSON CONTENT */}
       <div className="bg-white rounded-lg shadow mb-8 p-6">
@@ -1024,17 +894,46 @@ export default function LessonBuilderPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Skill Focus</label>
                   <select
-                    value={form.skillFocus}
-                    onChange={(e) => setForm({ ...form, skillFocus: e.target.value })}
+                    value={skillFocusSelection}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSkillFocusSelection(value);
+                      if (value === 'Other' || value === '__custom__') {
+                        setForm({ ...form, skillFocus: customSkillFocus });
+                      } else {
+                        setForm({ ...form, skillFocus: value });
+                        setCustomSkillFocus('');
+                      }
+                    }}
                     className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
                   >
                     <option value="">Select skill focus...</option>
-                    {SKILL_FOCUS_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {skillFocusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
+                    {!isSkillFocusValid && form.skillFocus.trim() && (
+                      <option value="__custom__">Custom / Legacy</option>
+                    )}
                   </select>
+                  {(skillFocusSelection === 'Other' || skillFocusSelection === '__custom__') && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Custom Skill Focus
+                      </label>
+                      <input
+                        type="text"
+                        value={customSkillFocus}
+                        onChange={(e) => {
+                          setCustomSkillFocus(e.target.value);
+                          setForm({ ...form, skillFocus: e.target.value });
+                        }}
+                        placeholder="Enter custom focus"
+                        className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm border-gray-300"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1406,14 +1305,6 @@ export default function LessonBuilderPage() {
           )}
         </div>
 
-        {/* Save Button */}
-        <button
-          onClick={handleSaveLesson}
-          disabled={isSaveDisabled}
-          className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-lg"
-        >
-          {saving ? 'Saving...' : 'Save Lesson'}
-        </button>
       </div>
 
       {/* Navigation */}
@@ -1431,6 +1322,18 @@ export default function LessonBuilderPage() {
           Back to Dashboard
         </Link>
       </div>
+
+      {showPlanMyGame && (
+        <PlanMyGameWizard
+          isOpen={showPlanMyGame}
+          onClose={() => setShowPlanMyGame(false)}
+          onImport={handleImportPlan}
+          initialGradeGroup={form.gradeGroup === '3-5' ? '3-5' : 'K-2'}
+          initialDurationMinutes={form.durationMinutes}
+          initialUnit={showCustomUnit ? '' : form.unit}
+          initialSkillFocus={form.skillFocus}
+        />
+      )}
     </div>
   );
 }

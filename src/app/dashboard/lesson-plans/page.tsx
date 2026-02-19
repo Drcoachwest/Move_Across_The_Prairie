@@ -79,7 +79,7 @@ export default function LessonPlans() {
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="mb-8 flex gap-4">
           <Link
-            href="/dashboard/lesson-plans/new"
+            href="/dashboard/lesson-builder"
             className="btn-primary"
           >
             + Create New Lesson Plan
@@ -92,7 +92,7 @@ export default function LessonPlans() {
               You have not created any lesson plans yet.
             </p>
             <Link
-              href="/dashboard/lesson-plans/new"
+              href="/dashboard/lesson-builder"
               className="btn-primary"
             >
               Create Your First Lesson Plan
