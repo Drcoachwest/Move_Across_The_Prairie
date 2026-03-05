@@ -11,26 +11,7 @@ export interface PacerComparison {
   improvementMessage: string;
 }
 
-export interface FitnessZone {
-  zone: 'HFZ' | 'NeedImprovement' | 'NoData';
-  min: number;
-  max: number;
-}
-
-/**
- * Determine which fitness zone a PACER score falls into
- */
-export function getZone(laps: number | undefined, fallMin: number, fallMax: number): FitnessZone {
-  if (laps === undefined || laps === null) {
-    return { zone: 'NoData', min: fallMin, max: fallMax };
-  }
-  
-  if (laps >= fallMin && laps <= fallMax) {
-    return { zone: 'HFZ', min: fallMin, max: fallMax };
-  } else {
-    return { zone: 'NeedImprovement', min: fallMin, max: fallMax };
-  }
-}
+export type HFZStatus = 'HFZ' | 'NI' | 'NA';
 
 /**
  * Calculate improvement between Fall and Spring PACER scores
@@ -41,8 +22,8 @@ export function getZone(laps: number | undefined, fallMin: number, fallMax: numb
 export function calculateImprovement(
   fallLaps: number | undefined,
   springLaps: number | undefined,
-  fallMin: number,
-  fallMax: number
+  fallHFZ: HFZStatus,
+  springHFZ: HFZStatus
 ): PacerComparison {
   // No data to compare
   if (!fallLaps || !springLaps) {
@@ -60,10 +41,6 @@ export function calculateImprovement(
   const lapDifference = springLaps - fallLaps;
   const percentageChange = (lapDifference / fallLaps) * 100;
 
-  // Get zones for both tests
-  const fallZone = getZone(fallLaps, fallMin, fallMax);
-  const springZone = getZone(springLaps, fallMin, fallMax);
-
   // Determine if significant improvement
   let isSignificantImprovement = false;
   let improvementStatus: 'improved' | 'declined' | 'no-change' = 'no-change';
@@ -78,7 +55,7 @@ export function calculateImprovement(
       improvementMessage = `Significant improvement! +${lapDifference} laps (+${percentageChange.toFixed(1)}%)`;
     }
     // Criteria 2: Moved from "Improvement Needed" to "HFZ"
-    else if (fallZone.zone === 'NeedImprovement' && springZone.zone === 'HFZ') {
+    else if (fallHFZ === 'NI' && springHFZ === 'HFZ') {
       isSignificantImprovement = true;
       improvementMessage = `Moved to Healthy Fitness Zone! +${lapDifference} laps`;
     }

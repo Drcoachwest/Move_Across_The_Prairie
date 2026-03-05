@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 export default function TeacherSetupPage() {
   const router = useRouter();
   const [step, setStep] = useState<'schoolLevel' | 'elementary' | 'secondary'>('schoolLevel');
-  const [schoolLevel, setSchoolLevel] = useState<'ELEMENTARY' | 'SECONDARY' | ''>('');
   const [grade, setGrade] = useState('');
   const [department, setDepartment] = useState('');
   const [periods, setPeriods] = useState<number[]>([1, 2, 3]);
@@ -34,7 +33,6 @@ export default function TeacherSetupPage() {
   }, [router]);
 
   const handleSchoolLevelSelect = (level: 'ELEMENTARY' | 'SECONDARY') => {
-    setSchoolLevel(level);
     if (level === 'ELEMENTARY') {
       setStep('elementary');
     } else {

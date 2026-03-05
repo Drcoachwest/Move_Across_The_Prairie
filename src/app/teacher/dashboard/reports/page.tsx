@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { type CardioTestType, type Sex, type TestSeason } from '@/lib/fitnessgram/constants';
+import standards from '@/lib/fitnessgram-standards.json';
+import { getHFZResults } from '@/lib/fitnessgram/hfz';
+import HFZRuleInfo from '@/components/fitnessgram/HFZRuleInfo';
 
 interface Student {
   id: string;
   districtId: string;
   firstName: string;
   lastName: string;
-  sex: string;
+  sex: Sex;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
@@ -19,8 +23,9 @@ interface TestData {
   id: string;
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   testYear: number;
+  cardioTestType?: CardioTestType;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -79,14 +84,7 @@ export default function ReportsPage() {
     getTeacherInfo();
   }, []);
 
-  useEffect(() => {
-    if (teacherInfo) {
-      loadStudents();
-      loadTests();
-    }
-  }, [teacherInfo]);
-
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/admin/students');
@@ -101,18 +99,38 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [teacherInfo]);
 
-  const loadTests = async () => {
+  const loadTests = useCallback(async (grade: string, classroomTeacher: string) => {
     try {
-      const response = await fetch('/api/admin/assessment');
+      if (!grade) {
+        setTests([]);
+        return;
+      }
+
+      const params = new URLSearchParams({ grade });
+      if (classroomTeacher) params.set('classroomTeacher', classroomTeacher);
+
+      const response = await fetch(`/api/teacher/assessment?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to load tests');
       const data = await response.json();
       setTests(data.tests || []);
     } catch (err) {
       console.error('Failed to load tests:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (teacherInfo) {
+      loadStudents();
+    }
+  }, [teacherInfo, loadStudents]);
+
+  useEffect(() => {
+    if (teacherInfo) {
+      loadTests(selectedGrade, selectedClassroomTeacher);
+    }
+  }, [teacherInfo, loadTests, selectedClassroomTeacher, selectedGrade]);
 
   const availableGrades = Array.from(new Set(students.map(s => s.currentGrade))).sort((a, b) => a - b);
   const gradeFilteredStudents = selectedGrade
@@ -130,10 +148,26 @@ export default function ReportsPage() {
   const completionRate = totalStudents > 0 ? Math.round((completedTests / totalStudents) * 100) : 0;
 
   // Fitness zone stats
-  const healthyZoneCount = classroomFilteredTests.filter(t => {
-    const pacerZone = t.pacerOrMileRun ? 'healthy' : null; // placeholder
-    const bmiZone = t.bmi ? 'healthy' : null;
-    return pacerZone === 'healthy' || bmiZone === 'healthy';
+  const healthyZoneCount = classroomFilteredTests.filter((test) => {
+    const student = students.find((s) => s.id === test.studentId);
+    if (!student) return false;
+    return (
+      getHFZResults({
+        student,
+        test: {
+          testDate: test.testDate,
+          cardioTestType: test.cardioTestType,
+          pacerOrMileRun: test.pacerOrMileRun,
+          pushups: test.pushups,
+          situps: test.situps,
+          sitAndReach: test.sitAndReach,
+          trunkLift: test.trunkLift,
+          height: test.height,
+          weight: test.weight,
+        },
+        standards: standards as any,
+      }).overall === 'HFZ'
+    );
   }).length;
 
   const averageBMI = classroomFilteredTests.length > 0
@@ -146,7 +180,7 @@ export default function ReportsPage() {
 
   const exportToCSV = () => {
     const rows = [
-      ['Student', 'Grade', 'Classroom Teacher', 'Test Date', 'PACER/Mile', 'Pushups', 'Situps', 'Sit & Reach', 'Height', 'Weight', 'BMI', 'Trunk Lift'],
+      ['Student', 'Grade', 'Classroom Teacher', 'Test Date', 'PACER/Mile', 'Pushups', 'Situps', 'sit_and_reach_cm', 'height_in', 'weight_lb', 'bmi', 'trunk_lift_in'],
       ...classroomFilteredTests.map(t => [
         `${t.student.firstName} ${t.student.lastName}`,
         t.student.currentGrade,
@@ -244,9 +278,10 @@ export default function ReportsPage() {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-gray-600 text-sm font-medium">Healthy Zone</p>
+          <p className="text-gray-600 text-sm font-medium">HFZ</p>
           <p className="text-3xl font-bold text-green-600 mt-2">{healthyZoneCount}</p>
           <p className="text-xs text-gray-500 mt-1">students in zone</p>
+          <HFZRuleInfo />
         </div>
       </div>
 

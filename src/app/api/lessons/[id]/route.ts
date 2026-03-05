@@ -68,7 +68,14 @@ export async function GET(
     }
 
     // Populate attached resources if resourceIds exist
-    let resources = [];
+    let resources: Array<{
+      id: string;
+      title: string;
+      unit: string | null;
+      type: string;
+      fileUrl: string | null;
+      externalUrl: string | null;
+    }> = [];
     if (lesson.resourceIds) {
       const resourceIdArray = lesson.resourceIds.split(',').filter(Boolean);
       if (resourceIdArray.length > 0) {

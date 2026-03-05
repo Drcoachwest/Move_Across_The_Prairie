@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 interface Resource {
@@ -44,12 +44,7 @@ export default function EditLessonPlan() {
   const [message, setMessage] = useState("");
   const [notFound, setNotFound] = useState(false);
 
-  useEffect(() => {
-    fetchLessonPlan();
-    fetchResources();
-  }, [lessonPlanId]);
-
-  const fetchLessonPlan = async () => {
+  const fetchLessonPlan = useCallback(async () => {
     try {
       const response = await fetch(`/api/lessons/${lessonPlanId}`);
       const data = await response.json();
@@ -62,9 +57,9 @@ export default function EditLessonPlan() {
       console.error("Error fetching lesson plan:", error);
       setNotFound(true);
     }
-  };
+  }, [lessonPlanId]);
 
-  const fetchResources = async () => {
+  const fetchResources = useCallback(async () => {
     try {
       const response = await fetch("/api/curriculum");
       const data = await response.json();
@@ -78,7 +73,12 @@ export default function EditLessonPlan() {
     } catch (error) {
       console.error("Error fetching resources:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLessonPlan();
+    fetchResources();
+  }, [fetchLessonPlan, fetchResources]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>

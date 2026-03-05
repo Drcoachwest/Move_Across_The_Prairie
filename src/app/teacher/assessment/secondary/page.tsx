@@ -1,9 +1,23 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import standards from '@/lib/fitnessgram-standards.json';
+import { calculateBMI_US } from '@/lib/fitnessgram/bmi';
+import { computeAgeOnTestDate, getBmiHfzRange, getHFZResults, getHfzThresholds, isHFZ } from '@/lib/fitnessgram/hfz';
+import HFZRuleInfo from '@/components/fitnessgram/HFZRuleInfo';
+import { FITNESSGRAM_LABELS } from '@/lib/fitnessgram/labels';
+import { normalizeNumberInput } from '@/lib/fitnessgram/validation';
+import {
+  CARDIO_TEST_OPTIONS,
+  CARDIO_TEST_TYPE,
+  SEASON_OPTIONS,
+  TEST_SEASON,
+  type CardioTestType,
+  type Sex,
+  type TestSeason,
+} from '@/lib/fitnessgram/constants';
 
 interface ClassPeriod {
   id: string;
@@ -16,7 +30,7 @@ interface Student {
   districtId: string;
   firstName: string;
   lastName: string;
-  sex: string;
+  sex: Sex;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
@@ -26,8 +40,8 @@ interface Student {
 interface FormData {
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
-  cardioTestType: 'PACER' | 'MILE';
+  testSeason: TestSeason;
+  cardioTestType: CardioTestType;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -40,13 +54,17 @@ interface FormData {
   notes?: string;
 }
 
+type RowData = FormData;
+
+type RowStatus = 'saved' | 'dirty' | 'saving' | 'error';
+
 interface TestData {
   id: string;
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   testYear: number;
-  cardioTestType?: 'PACER' | 'MILE';
+  cardioTestType?: CardioTestType;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -77,9 +95,7 @@ interface TeacherInfo {
   department?: string;
 }
 
-type FitnessComponent = 'pacerOrMileRun' | 'pushups' | 'situps' | 'sitAndReach' | 'trunkLift' | 'bmi';
-
-type StandardsRange = { min?: number; max?: number };
+type StandardsRange = { min?: number | null; max?: number | null };
 type StandardsData = {
   boys: {
     cardio: Record<string, { pacer20?: StandardsRange; bmi?: StandardsRange }>;
@@ -91,7 +107,40 @@ type StandardsData = {
   };
 };
 
+const formatSecondsAsTime = (totalSeconds: number) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
+const formatBmiRangeLabel = (range?: { min?: number | null; max?: number | null }) => {
+  if (!range || typeof range.min !== 'number' || typeof range.max !== 'number') return null;
+  return `HFZ BMI range: ${range.min.toFixed(1)}–${range.max.toFixed(1)}`;
+};
+
+const getSexLabel = (sex: string) => {
+  const normalized = String(sex).trim().toLowerCase();
+  if (['m', 'male', 'boy', 'boys'].includes(normalized)) return 'Boys';
+  if (['f', 'female', 'girl', 'girls'].includes(normalized)) return 'Girls';
+  return 'Students';
+};
+
 export default function SecondaryAssessmentPage() {
+  const STORAGE_SELECTED_PERIOD_ID = 'fg_selected_period_id';
+  const safeGet = (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const safeSet = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // ignore storage errors
+    }
+  };
   const router = useRouter();
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [classPeriods, setClassPeriods] = useState<ClassPeriod[]>([]);
@@ -99,19 +148,45 @@ export default function SecondaryAssessmentPage() {
   const [tests, setTests] = useState<TestData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState<'enter' | 'view' | 'class-summary'>('enter');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
   const [viewTestsPeriod, setViewTestsPeriod] = useState<string>('');
-  const [viewTestsSeason, setViewTestsSeason] = useState<string>('');
-  const [formData, setFormData] = useState<FormData>({
-    studentId: '',
-    testDate: new Date().toISOString().split('T')[0],
-    testSeason: 'Fall',
-    cardioTestType: 'PACER',
-  });
-  const [submitting, setSubmitting] = useState(false);
+  const [viewTestsSeason, setViewTestsSeason] = useState<TestSeason | ''>('');
+  const [rowsByStudentId, setRowsByStudentId] = useState<Record<string, RowData>>({});
+  const [dirtyRowIds, setDirtyRowIds] = useState<Set<string>>(new Set());
+  const [patchesByStudentId, setPatchesByStudentId] = useState<Record<string, Partial<RowData>>>({});
+  const [rowStatusById, setRowStatusById] = useState<Record<string, RowStatus>>({});
+  const [rowErrorById, setRowErrorById] = useState<Record<string, string>>({});
+  const [isSavingClass, setIsSavingClass] = useState(false);
+  const [seasonAll, setSeasonAll] = useState<TestSeason | ''>('');
+  const [cardioAll, setCardioAll] = useState<CardioTestType | ''>('');
+  const [dateAll, setDateAll] = useState<string>('');
+  const prevSeasonAllRef = useRef<TestSeason | ''>('');
+  const prevCardioAllRef = useRef<CardioTestType | ''>('');
+  const prevDateAllRef = useRef<string>('');
+
+  const failedRowIds = useMemo(
+    () => Object.keys(rowStatusById).filter((id) => rowStatusById[id] === 'error'),
+    [rowStatusById]
+  );
+  const failedCount = failedRowIds.length;
+
+  const renderHfzIndicator = (status: boolean | null, title?: string) => {
+    if (status === null) return null;
+    const badgeClass = status
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-rose-200 bg-rose-50 text-rose-700';
+
+    return (
+      <div
+        className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] ${badgeClass}`}
+        title={title}
+      >
+        {status ? 'HFZ' : 'Not HFZ'}
+      </div>
+    );
+  };
 
   // Get teacher info from session
   useEffect(() => {
@@ -142,7 +217,7 @@ export default function SecondaryAssessmentPage() {
     getTeacherInfo();
   }, [router]);
 
-  const loadClassPeriods = async () => {
+  const loadClassPeriods = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/teacher/periods');
@@ -150,7 +225,20 @@ export default function SecondaryAssessmentPage() {
       const data = await response.json();
       setClassPeriods(data.periods || []);
       if (data.periods && data.periods.length > 0) {
-        setSelectedPeriod(data.periods[0].id);
+        const storedPeriodId = typeof window !== 'undefined' ? safeGet(STORAGE_SELECTED_PERIOD_ID) : null;
+        const hasStored = storedPeriodId && data.periods.some((p: ClassPeriod) => p.id === storedPeriodId);
+        if (hasStored && storedPeriodId) {
+          setSelectedPeriod(storedPeriodId);
+        } else {
+          setSelectedPeriod(data.periods[0].id);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(STORAGE_SELECTED_PERIOD_ID);
+            } catch {
+              // ignore storage errors
+            }
+          }
+        }
       }
       setError('');
     } catch (err) {
@@ -158,7 +246,7 @@ export default function SecondaryAssessmentPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const loadStudentsForPeriod = async (periodId: string) => {
     try {
@@ -175,9 +263,9 @@ export default function SecondaryAssessmentPage() {
     }
   };
 
-  const loadTests = async () => {
+  const loadTests = async (periodId: string) => {
     try {
-      const response = await fetch('/api/admin/assessment');
+      const response = await fetch(`/api/teacher/assessment?periodId=${encodeURIComponent(periodId)}`);
       if (!response.ok) throw new Error('Failed to load tests');
       const data = await response.json();
       setTests(data.tests || []);
@@ -190,171 +278,566 @@ export default function SecondaryAssessmentPage() {
   useEffect(() => {
     if (teacherInfo) {
       loadClassPeriods();
-      loadTests();
     }
-  }, [teacherInfo]);
+  }, [teacherInfo, loadClassPeriods]);
 
   // Load students when period changes
   useEffect(() => {
     if (selectedPeriod && teacherInfo) {
       loadStudentsForPeriod(selectedPeriod);
+      loadTests(selectedPeriod);
     }
   }, [selectedPeriod, teacherInfo]);
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    // If changing student, check if they have an existing test
-    if (name === 'studentId') {
-      const existingTest = tests.find(t => t.studentId === value);
-      if (existingTest) {
-        const formattedTestDate = existingTest.testDate
-          ? new Date(existingTest.testDate).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0];
-        // Load existing test data
-        setFormData({
-          studentId: value,
-          testDate: formattedTestDate,
-          testSeason: existingTest.testSeason,
-          cardioTestType: existingTest.cardioTestType || 'PACER',
-          pacerOrMileRun: existingTest.pacerOrMileRun,
-          pushups: existingTest.pushups,
-          situps: existingTest.situps,
-          sitAndReach: existingTest.sitAndReach,
-          shoulderStretchRight: existingTest.shoulderStretchRight,
-          shoulderStretchLeft: existingTest.shoulderStretchLeft,
-          height: existingTest.height,
-          weight: existingTest.weight,
-          trunkLift: existingTest.trunkLift,
-          notes: existingTest.notes,
-        });
-        return;
-      } else {
-        // New test - reset form
-        setFormData({
-          studentId: value,
-          testDate: new Date().toISOString().split('T')[0],
-          testSeason: formData.testSeason,
-          cardioTestType: formData.cardioTestType,
-        });
-        return;
-      }
-    }
-
-    const numericValue = type === 'number' ? (value ? Number(value) : undefined) : undefined;
-    
-    let normalizedValue: string | number | undefined = value;
-    
-    if (type === 'number') {
-      if (numericValue === undefined) {
-        normalizedValue = undefined;
-      } else if (name === 'pacerOrMileRun') {
-        normalizedValue = formData.cardioTestType === 'PACER' ? Math.round(numericValue) : numericValue;
-      } else {
-        normalizedValue = Math.round(numericValue);
-      }
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : normalizedValue,
-    }));
-  };
-
-  const calculateBMI = (height?: number, weight?: number) => {
-    if (!height || !weight) return undefined;
-    return (weight / (height * height)) * 703;
-  };
-
-  const calculateAge = (dateOfBirth: string, testDate: string) => {
-    if (!dateOfBirth || !testDate) return undefined;
-    const dob = new Date(dateOfBirth);
-    const test = new Date(testDate);
-    let age = test.getFullYear() - dob.getFullYear();
-    const monthDiff = test.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && test.getDate() < dob.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const handleSubmitTest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.studentId) {
-      setError('Please select a student');
+  useEffect(() => {
+    if (!selectedPeriod || students.length === 0) {
+      setRowsByStudentId({});
+      setPatchesByStudentId({});
+      setRowStatusById({});
+      setRowErrorById({});
+      setDirtyRowIds(new Set());
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const response = await fetch('/api/admin/assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+    const today = new Date().toISOString().split('T')[0];
+    const testsByStudent = new Map(tests.map((test) => [test.studentId, test]));
+    const nextRows: Record<string, RowData> = {};
+    const nextStatuses: Record<string, RowStatus> = {};
 
-      if (response.ok) {
-        setSuccess('Test recorded successfully');
-        setFormData({
-          studentId: '',
-          testDate: new Date().toISOString().split('T')[0],
-          testSeason: formData.testSeason,
-          cardioTestType: 'PACER',
-        });
-        loadTests();
-        setTimeout(() => setSuccess(''), 3000);
-      } else {
-        const error = await response.json();
-        setError(error.message || 'Failed to save test');
+    students.forEach((student) => {
+      const existing = testsByStudent.get(student.id);
+      const testDate = existing?.testDate
+        ? new Date(existing.testDate).toISOString().split('T')[0]
+        : today;
+      nextRows[student.id] = {
+        studentId: student.id,
+        testDate,
+        testSeason: (existing?.testSeason as TestSeason) || TEST_SEASON.Fall,
+        cardioTestType: (existing?.cardioTestType as CardioTestType) || CARDIO_TEST_TYPE.PACER,
+        pacerOrMileRun: existing?.pacerOrMileRun ?? undefined,
+        pushups: existing?.pushups ?? undefined,
+        situps: existing?.situps ?? undefined,
+        sitAndReach: existing?.sitAndReach ?? undefined,
+        shoulderStretchRight: existing?.shoulderStretchRight ?? undefined,
+        shoulderStretchLeft: existing?.shoulderStretchLeft ?? undefined,
+        height: existing?.height ?? undefined,
+        weight: existing?.weight ?? undefined,
+        trunkLift: existing?.trunkLift ?? undefined,
+        notes: existing?.notes ?? undefined,
+      };
+      nextStatuses[student.id] = 'saved';
+    });
+
+    setRowsByStudentId(nextRows);
+    setPatchesByStudentId({});
+    setRowStatusById(nextStatuses);
+    setRowErrorById({});
+    setDirtyRowIds(new Set());
+  }, [selectedPeriod, students, tests]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedPeriod) {
+      safeSet(STORAGE_SELECTED_PERIOD_ID, selectedPeriod);
+    } else {
+      try {
+        localStorage.removeItem(STORAGE_SELECTED_PERIOD_ID);
+      } catch {
+        // ignore storage errors
       }
-    } catch (err) {
-      setError('Failed to save test');
-    } finally {
-      setSubmitting(false);
     }
+  }, [selectedPeriod]);
+
+  const deriveTestYear = (testDate?: string) => {
+    if (testDate) {
+      const parsed = new Date(testDate);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.getFullYear();
+      }
+    }
+    return new Date().getFullYear();
   };
 
-  const getStudentTest = (studentId: string) => tests.find(t => t.studentId === studentId);
 
-  const getHFZStatus = (test: TestData, student: Student): 'HFZ' | 'Needs Improvement' => {
-    const age = calculateAge(student.dateOfBirth, test.testDate);
-    if (age === undefined) return 'Needs Improvement';
+  const handleRowChange = (
+    studentId: string,
+    field: keyof RowData,
+    value: string | boolean | number | undefined
+  ) => {
+    setRowsByStudentId((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [field]: value,
+      },
+    }));
 
-    const sex = student.sex.toUpperCase();
-    const ageKey = age.toString();
-    const standardsData = standards as StandardsData;
-    const sexData = sex === 'M' ? standardsData.boys : standardsData.girls;
+    setPatchesByStudentId((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [field]: value,
+      },
+    }));
 
-    const components: (keyof typeof test)[] = ['pacerOrMileRun', 'pushups', 'situps', 'sitAndReach', 'trunkLift'];
-    let hfzCount = 0;
+    setDirtyRowIds((prev) => {
+      const next = new Set(prev);
+      next.add(studentId);
+      return next;
+    });
 
-    for (const component of components) {
-      const value = test[component];
-      if (value === undefined || value === null) continue;
+    setRowStatusById((prev) => ({
+      ...prev,
+      [studentId]: 'dirty',
+    }));
 
-      let isHFZ = false;
-      if (component === 'pacerOrMileRun') {
-        const standard = sexData.cardio[ageKey]?.pacer20;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'pushups') {
-        const standard = sexData.muscular[ageKey]?.pushup90;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'situps') {
-        const standard = sexData.muscular[ageKey]?.curlup;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'sitAndReach') {
-        const standard = sexData.muscular[ageKey]?.sitAndReach;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'trunkLift') {
-        const standard = sexData.muscular[ageKey]?.trunkLift;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
+    setRowErrorById((prev) => {
+      if (!prev[studentId]) return prev;
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+  };
+
+  const applyToAllRows = useCallback(
+    (field: keyof RowData, value: string | boolean | number | undefined) => {
+      const studentIds = Object.keys(rowsByStudentId);
+      if (studentIds.length === 0) return;
+
+      setRowsByStudentId((prev) => {
+        const next: Record<string, RowData> = {};
+        studentIds.forEach((id) => {
+          next[id] = {
+            ...prev[id],
+            [field]: value,
+          };
+        });
+        return next;
+      });
+
+      setPatchesByStudentId((prev) => {
+        const next = { ...prev };
+        studentIds.forEach((id) => {
+          next[id] = {
+            ...next[id],
+            [field]: value,
+          };
+        });
+        return next;
+      });
+
+      setDirtyRowIds((prev) => {
+        const next = new Set(prev);
+        studentIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      setRowStatusById((prev) => {
+        const next = { ...prev };
+        studentIds.forEach((id) => {
+          next[id] = 'dirty';
+        });
+        return next;
+      });
+
+      setRowErrorById((prev) => {
+        const next = { ...prev };
+        studentIds.forEach((id) => {
+          if (next[id]) delete next[id];
+        });
+        return next;
+      });
+    },
+    [rowsByStudentId]
+  );
+
+  const saveClass = useCallback(async () => {
+    const dirtyIds = Array.from(dirtyRowIds);
+    if (dirtyIds.length === 0) return;
+
+    const items = dirtyIds.map((studentId) => {
+      const baseRow = rowsByStudentId[studentId];
+      const patch = patchesByStudentId[studentId];
+      const merged = { ...baseRow, ...patch };
+      return {
+        studentId,
+        testDate: merged.testDate,
+        testSeason: merged.testSeason,
+        testYear: deriveTestYear(merged.testDate),
+        cardioTestType: merged.cardioTestType,
+        pacerOrMileRun: merged.pacerOrMileRun,
+        pushups: merged.pushups,
+        situps: merged.situps,
+        sitAndReach: merged.sitAndReach,
+        shoulderStretchRight: merged.shoulderStretchRight,
+        shoulderStretchLeft: merged.shoulderStretchLeft,
+        height: merged.height,
+        weight: merged.weight,
+        trunkLift: merged.trunkLift,
+        notes: merged.notes,
+      };
+    });
+
+    setIsSavingClass(true);
+    setRowStatusById((prev) => {
+      const next = { ...prev };
+      dirtyIds.forEach((id) => {
+        next[id] = 'saving';
+      });
+      return next;
+    });
+
+    try {
+      const response = await fetch('/api/admin/assessment/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || data.message || 'Failed to save class');
       }
 
-      if (isHFZ) hfzCount++;
+      const data = await response.json();
+      const results: Array<{ studentId: string; success: boolean; error?: string }> = data.results || [];
+
+      results.forEach((result) => {
+        if (!result.success) {
+          console.log('Save failed for student', result.studentId, result.error);
+          setRowStatusById((prev) => ({ ...prev, [result.studentId]: 'error' }));
+          setRowErrorById((prev) => ({
+            ...prev,
+            [result.studentId]: 'error',
+          }));
+        } else {
+          setRowStatusById((prev) => ({ ...prev, [result.studentId]: 'saved' }));
+        }
+      });
+
+      setPatchesByStudentId((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (result.success) delete next[result.studentId];
+        });
+        return next;
+      });
+
+      setDirtyRowIds((prev) => {
+        const next = new Set(prev);
+        results.forEach((result) => {
+          if (result.success) next.delete(result.studentId);
+        });
+        return next;
+      });
+    } catch (err: any) {
+      const message = err.message || 'Failed to save class';
+      console.log('Save class failed', message);
+      setRowStatusById((prev) => {
+        const next = { ...prev };
+        dirtyIds.forEach((id) => {
+          next[id] = 'error';
+        });
+        return next;
+      });
+      setRowErrorById((prev) => {
+        const next = { ...prev };
+        dirtyIds.forEach((id) => {
+          next[id] = 'error';
+        });
+        return next;
+      });
+    } finally {
+      setIsSavingClass(false);
+    }
+  }, [dirtyRowIds, rowsByStudentId, patchesByStudentId]);
+
+  const retryFailed = useCallback(async () => {
+    if (failedRowIds.length === 0) return;
+
+    const items = failedRowIds.map((studentId) => {
+      const baseRow = rowsByStudentId[studentId];
+      const patch = patchesByStudentId[studentId];
+      const merged = { ...baseRow, ...patch };
+      return {
+        studentId,
+        testDate: merged.testDate,
+        testSeason: merged.testSeason,
+        testYear: deriveTestYear(merged.testDate),
+        cardioTestType: merged.cardioTestType,
+        pacerOrMileRun: merged.pacerOrMileRun,
+        pushups: merged.pushups,
+        situps: merged.situps,
+        sitAndReach: merged.sitAndReach,
+        shoulderStretchRight: merged.shoulderStretchRight,
+        shoulderStretchLeft: merged.shoulderStretchLeft,
+        height: merged.height,
+        weight: merged.weight,
+        trunkLift: merged.trunkLift,
+        notes: merged.notes,
+      };
+    });
+
+    setIsSavingClass(true);
+    setRowStatusById((prev) => {
+      const next = { ...prev };
+      failedRowIds.forEach((id) => {
+        next[id] = 'saving';
+      });
+      return next;
+    });
+
+    try {
+      const response = await fetch('/api/admin/assessment/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch (err) {
+        console.log('Retry failed: invalid response', err);
+      }
+
+      if (!response.ok) {
+        console.log('Retry failed: request error', data?.error || data?.message);
+        setRowStatusById((prev) => {
+          const next = { ...prev };
+          failedRowIds.forEach((id) => {
+            next[id] = 'error';
+          });
+          return next;
+        });
+        setRowErrorById((prev) => {
+          const next = { ...prev };
+          failedRowIds.forEach((id) => {
+            next[id] = 'Couldn’t Save — try again.';
+          });
+          return next;
+        });
+        return;
+      }
+
+      if (data?.error) {
+        console.log('Retry failed: bulk error', data.error);
+        setRowStatusById((prev) => {
+          const next = { ...prev };
+          failedRowIds.forEach((id) => {
+            next[id] = 'error';
+          });
+          return next;
+        });
+        setRowErrorById((prev) => {
+          const next = { ...prev };
+          failedRowIds.forEach((id) => {
+            next[id] = 'Couldn’t Save — try again.';
+          });
+          return next;
+        });
+        return;
+      }
+
+      const results: Array<{ studentId: string; success: boolean; error?: string }> = data?.results || [];
+      const successIds = new Set<string>();
+
+      setRowStatusById((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (result.success) {
+            next[result.studentId] = 'saved';
+            successIds.add(result.studentId);
+          } else {
+            next[result.studentId] = 'error';
+          }
+        });
+        return next;
+      });
+
+      setRowErrorById((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (result.success) {
+            delete next[result.studentId];
+          } else {
+            console.log('Retry failed for student', result.studentId, result.error);
+            next[result.studentId] = 'Couldn’t Save — try again.';
+          }
+        });
+        return next;
+      });
+
+      setPatchesByStudentId((prev) => {
+        const next = { ...prev };
+        successIds.forEach((id) => {
+          if (next[id]) delete next[id];
+        });
+        return next;
+      });
+
+      setDirtyRowIds((prev) => {
+        const next = new Set(prev);
+        successIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } catch (err: any) {
+      console.log('Retry failed: request exception', err?.message || err);
+      setRowStatusById((prev) => {
+        const next = { ...prev };
+        failedRowIds.forEach((id) => {
+          next[id] = 'error';
+        });
+        return next;
+      });
+      setRowErrorById((prev) => {
+        const next = { ...prev };
+        failedRowIds.forEach((id) => {
+          next[id] = 'Couldn’t Save — try again.';
+        });
+        return next;
+      });
+    } finally {
+      setIsSavingClass(false);
+    }
+  }, [failedRowIds, rowsByStudentId, patchesByStudentId]);
+
+  useEffect(() => {
+    if (dirtyRowIds.size === 0) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirtyRowIds]);
+
+  useEffect(() => {
+    const handleLinkClick = (event: MouseEvent) => {
+      if (dirtyRowIds.size === 0) return;
+      const target = event.target as HTMLElement | null;
+      const link = target?.closest('a');
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      const shouldLeave = window.confirm('You have unsaved changes. Leave without saving?');
+      if (!shouldLeave) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (dirtyRowIds.size === 0) return;
+      const shouldLeave = window.confirm('You have unsaved changes. Leave without saving?');
+      if (!shouldLeave) {
+        event.preventDefault();
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    document.addEventListener('click', handleLinkClick, true);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      document.removeEventListener('click', handleLinkClick, true);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [dirtyRowIds]);
+
+  const confirmNavigateIfDirty = (event: React.MouseEvent) => {
+    if (dirtyRowIds.size === 0) {
+      router.push('/teacher/dashboard');
+      return;
+    }
+    const shouldLeave = window.confirm('You have unsaved changes. Leave without saving?');
+    if (!shouldLeave) {
+      event.preventDefault();
+      return;
+    }
+    router.push('/teacher/dashboard');
+  };
+
+  const getStatusLabel = (status: 'HFZ' | 'NI' | 'NA') => {
+    if (status === 'HFZ') return 'HFZ';
+    if (status === 'NI') return 'Needs Improvement';
+    return 'No Data';
+  };
+
+  const getUniformRowValue = useCallback(
+    <K extends keyof RowData>(field: K): RowData[K] | '' => {
+      const ids = Object.keys(rowsByStudentId);
+      if (ids.length === 0) return '';
+      const first = rowsByStudentId[ids[0]]?.[field];
+      for (let i = 1; i < ids.length; i += 1) {
+        if (rowsByStudentId[ids[i]]?.[field] !== first) {
+          return '';
+        }
+      }
+      return first ?? '';
+    },
+    [rowsByStudentId]
+  );
+
+  useEffect(() => {
+    const seasonValue = getUniformRowValue('testSeason') as TestSeason | '';
+    const cardioValue = getUniformRowValue('cardioTestType') as CardioTestType | '';
+    const dateValue = (getUniformRowValue('testDate') as string) || '';
+
+    setSeasonAll(seasonValue);
+    setCardioAll(cardioValue);
+    setDateAll(dateValue);
+    prevSeasonAllRef.current = seasonValue;
+    prevCardioAllRef.current = cardioValue;
+    prevDateAllRef.current = dateValue;
+  }, [rowsByStudentId, getUniformRowValue]);
+
+  const getSeasonLabel = (value: TestSeason) => {
+    return SEASON_OPTIONS.find((option) => option.value === value)?.label || value;
+  };
+
+  const confirmApplyToAll = (
+    field: keyof RowData,
+    nextValue: string | boolean | number | undefined,
+    displayValue: string,
+    setValue: (value: any) => void,
+    prevRef: React.MutableRefObject<any>
+  ) => {
+    if (students.length === 0) return false;
+    const count = students.length;
+    const confirmed = window.confirm(
+      `Apply ${displayValue} to ${count} student${count === 1 ? '' : 's'}?`
+    );
+    if (!confirmed) {
+      setValue(prevRef.current);
+      return false;
+    }
+    setValue(nextValue);
+    prevRef.current = nextValue;
+    applyToAllRows(field, nextValue);
+    return true;
+  };
+
+  const hasClassCardioEntries = () =>
+    Object.values(rowsByStudentId).some((row) => row.pacerOrMileRun !== undefined);
+
+  const handleClassCardioChange = (nextValue: CardioTestType) => {
+    const hasEntries = hasClassCardioEntries();
+    if (hasEntries) {
+      const shouldContinue = window.confirm(
+        'Switching cardio test will clear existing cardio scores for this class. Continue?'
+      );
+      if (!shouldContinue) {
+        setCardioAll(prevCardioAllRef.current);
+        return;
+      }
     }
 
-    return hfzCount >= 4 ? 'HFZ' : 'Needs Improvement';
+    setCardioAll(nextValue);
+    prevCardioAllRef.current = nextValue;
+    applyToAllRows('cardioTestType', nextValue);
+    if (hasEntries) {
+      applyToAllRows('pacerOrMileRun', undefined);
+    }
   };
 
   const filteredTests = tests.filter(test => {
@@ -364,6 +847,7 @@ export default function SecondaryAssessmentPage() {
     if (viewTestsSeason && test.testSeason !== viewTestsSeason) return false;
     return true;
   });
+
 
   if (loading) {
     return <div className="p-8 text-center">Loading...</div>;
@@ -375,18 +859,17 @@ export default function SecondaryAssessmentPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto py-8 px-4">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Assessment Manager</h1>
+      <div className="max-w-screen-2xl mx-auto pt-2 pb-1 px-4">
+        <div className="mb-2">
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">Assessment Manager</h1>
           <p className="text-gray-600">{teacherInfo.name} - {teacherInfo.department || 'Department'}</p>
           <p className="text-gray-600">{teacherInfo.school}</p>
         </div>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
-        {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">{success}</div>}
 
         {/* THREE TABS */}
-        <div className="mb-6 flex gap-4 border-b border-gray-200">
+        <div className="mb-2 flex gap-4 border-b border-gray-200">
           <button
             onClick={() => setActiveTab('enter')}
             className={`px-4 py-2 font-medium border-b-2 ${
@@ -421,11 +904,11 @@ export default function SecondaryAssessmentPage() {
 
         {/* TAB 1: ENTER TEST DATA */}
         {activeTab === 'enter' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Enter FitnesGram Test Data</h2>
+          <div className="bg-white rounded-lg shadow p-3">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">{FITNESSGRAM_LABELS.assessmentEntryTitle}</h2>
 
             {/* Period Selection */}
-            <div className="mb-6">
+            <div className="mb-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select Class Period</label>
               <select
                 value={selectedPeriod}
@@ -442,194 +925,487 @@ export default function SecondaryAssessmentPage() {
             </div>
 
             {selectedPeriod && (
-              <form onSubmit={handleSubmitTest} className="space-y-6" suppressHydrationWarning>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Student</label>
-                    <select
-                      name="studentId"
-                      value={formData.studentId}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">-- Select Student --</option>
-                      {students.map(student => (
-                        <option key={student.id} value={student.id}>
-                          {student.firstName} {student.lastName} (Grade {student.currentGrade})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
+                  <div className="text-xs text-gray-500 mb-1">These settings apply to the whole class.</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Season</label>
+                      <select
+                        value={seasonAll}
+                        onChange={(e) =>
+                          confirmApplyToAll(
+                            'testSeason',
+                            e.target.value as TestSeason,
+                            `Season: ${getSeasonLabel(e.target.value as TestSeason)}`,
+                            setSeasonAll,
+                            prevSeasonAllRef
+                          )
+                        }
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="" disabled>— Mixed —</option>
+                        {SEASON_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Test Date</label>
-                    <input
-                      type="date"
-                      name="testDate"
-                      value={formData.testDate}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cardio Test</label>
+                      <select
+                        value={cardioAll}
+                        onChange={(e) => handleClassCardioChange(e.target.value as CardioTestType)}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="" disabled>— Mixed —</option>
+                        {CARDIO_TEST_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Season</label>
-                    <select
-                      name="testSeason"
-                      value={formData.testSeason}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="Fall">Fall</option>
-                      <option value="Spring">Spring</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Cardio Test</label>
-                    <select
-                      name="cardioTestType"
-                      value={formData.cardioTestType}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="PACER">PACER (laps)</option>
-                      <option value="MILE">Mile Run (time)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Fitness Components */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {formData.cardioTestType === 'PACER' ? 'PACER Laps' : 'Mile Run Time (minutes)'}
-                    </label>
-                    <input
-                      type="number"
-                      name="pacerOrMileRun"
-                      value={formData.pacerOrMileRun || ''}
-                      onChange={handleFormChange}
-                      step={formData.cardioTestType === 'PACER' ? '1' : '0.1'}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Push-ups</label>
-                    <input
-                      type="number"
-                      name="pushups"
-                      value={formData.pushups || ''}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Sit-ups</label>
-                    <input
-                      type="number"
-                      name="situps"
-                      value={formData.situps || ''}
-                      onChange={handleFormChange}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Sit and Reach (inches)</label>
-                    <input
-                      type="number"
-                      name="sitAndReach"
-                      value={formData.sitAndReach || ''}
-                      onChange={handleFormChange}
-                      step="0.1"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Trunk Lift (inches)</label>
-                    <input
-                      type="number"
-                      name="trunkLift"
-                      value={formData.trunkLift || ''}
-                      onChange={handleFormChange}
-                      step="0.1"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Height (inches)</label>
-                    <input
-                      type="number"
-                      name="height"
-                      value={formData.height || ''}
-                      onChange={handleFormChange}
-                      step="0.1"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Weight (pounds)</label>
-                    <input
-                      type="number"
-                      name="weight"
-                      value={formData.weight || ''}
-                      onChange={handleFormChange}
-                      step="0.1"
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Test Date</label>
+                      <input
+                        type="date"
+                        value={dateAll}
+                        onChange={(e) =>
+                          confirmApplyToAll(
+                            'testDate',
+                            e.target.value,
+                            `Test Date: ${e.target.value || 'blank'}`,
+                            setDateAll,
+                            prevDateAllRef
+                          )
+                        }
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Shoulder Stretch */}
-                <div className="flex gap-4">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="shoulderStretchRight"
-                      checked={formData.shoulderStretchRight || false}
-                      onChange={handleFormChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 text-sm font-medium text-gray-700">Shoulder Stretch Right</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      name="shoulderStretchLeft"
-                      checked={formData.shoulderStretchLeft || false}
-                      onChange={handleFormChange}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 text-sm font-medium text-gray-700">Shoulder Stretch Left</label>
-                  </div>
-                </div>
+                {(() => {
+                  const derivedCardioTypes = new Set(
+                    students
+                      .map((student) => rowsByStudentId[student.id]?.cardioTestType)
+                      .filter((value): value is CardioTestType => Boolean(value))
+                  );
+                  const classCardioType = cardioAll || (derivedCardioTypes.size === 1
+                    ? Array.from(derivedCardioTypes)[0]
+                    : '');
+                  const missingCardioStudents = students
+                    .filter((student) => {
+                      const row = rowsByStudentId[student.id];
+                      if (!row) return false;
+                      const cardioType = row.cardioTestType || classCardioType;
+                      if (cardioType !== 'PACER' && cardioType !== 'MileRun') return false;
+                      return row.pacerOrMileRun === undefined || row.pacerOrMileRun === null;
+                    })
+                    .map((student) => `${student.firstName} ${student.lastName}`);
 
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                  <textarea
-                    name="notes"
-                    value={formData.notes || ''}
-                    onChange={handleFormChange}
-                    rows={3}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+                  return (
+                    <div className="mb-2 rounded-lg border border-gray-200 bg-white p-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-6 text-gray-700">
+                        <div>
+                          <span className="font-medium text-gray-900">Total students:</span>{' '}
+                          {students.length}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Cardio type:</span>{' '}
+                          {classCardioType === 'PACER'
+                            ? 'PACER'
+                            : classCardioType === 'MileRun'
+                              ? 'MileRun'
+                              : 'Not set'}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Missing cardio:</span>{' '}
+                          {missingCardioStudents.length}
+                        </div>
+                      </div>
+                      {missingCardioStudents.length > 0 && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          {missingCardioStudents.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded"
+                <div
+                  className="overflow-auto border border-gray-200 rounded-lg"
+                  style={{ maxHeight: 'calc(100vh - 200px)' }}
                 >
-                  {submitting ? 'Saving...' : 'Save Test'}
-                </button>
-              </form>
+                  <table className="min-w-full divide-y divide-gray-200 text-sm fitnessgram-entry-table fitnessgram-entry-table-compact">
+                    <thead className="bg-gray-100 text-gray-700 sticky top-0 z-20">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Student</th>
+                        <th className="px-3 py-2 text-left font-semibold">Test Date</th>
+                        <th className="px-3 py-2 text-left font-semibold">Season</th>
+                        <th className="px-3 py-2 text-left font-semibold">Cardio Test</th>
+                        <th className="px-3 py-2 text-left font-semibold">PACER/Mile</th>
+                        <th className="px-3 py-2 text-left font-semibold">Push-ups</th>
+                        <th className="px-3 py-2 text-left font-semibold">Sit-ups</th>
+                        <th className="px-3 py-2 text-left font-semibold">Sit & Reach (cm)</th>
+                        <th className="px-3 py-2 text-left font-semibold">Trunk Lift (in)</th>
+                        <th className="px-3 py-2 text-left font-semibold">Shoulder R</th>
+                        <th className="px-3 py-2 text-left font-semibold">Shoulder L</th>
+                        <th className="px-3 py-2 text-left font-semibold">Height (in)</th>
+                        <th className="px-3 py-2 text-left font-semibold">Weight (lb)</th>
+                        <th className="px-3 py-2 text-left font-semibold">BMI</th>
+                        <th className="px-3 py-2 text-left font-semibold">Notes</th>
+                        <th className="px-3 py-2 text-left font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {students.map((student) => {
+                        const row = rowsByStudentId[student.id];
+                        const status = rowStatusById[student.id];
+                        const hasRowError = Boolean(rowErrorById[student.id]);
+                        if (!row) return null;
+
+                        const statusColor = status === 'error'
+                          ? 'text-red-600'
+                          : status === 'saving'
+                            ? 'text-amber-600'
+                            : status === 'dirty'
+                              ? 'text-blue-600'
+                              : 'text-green-600';
+
+                        const effectiveTestDate = row.testDate || dateAll;
+                        const rawAge =
+                          effectiveTestDate && student.dateOfBirth
+                            ? computeAgeOnTestDate(new Date(student.dateOfBirth), new Date(effectiveTestDate))
+                            : null;
+                        const age = rawAge !== null && Number.isFinite(rawAge) ? rawAge : null;
+                        const thresholds = age !== null ? getHfzThresholds(student.sex, age) : null;
+                        const sexLabel = thresholds ? getSexLabel(student.sex) : null;
+
+                        const pacerStatus =
+                          row.cardioTestType === 'PACER' && typeof row.pacerOrMileRun === 'number' && age !== null
+                            ? isHFZ('PACER', row.pacerOrMileRun, { sex: student.sex, age })
+                            : null;
+                        const mileStatus =
+                          row.cardioTestType === 'MileRun' && typeof row.pacerOrMileRun === 'number' && age !== null
+                            ? isHFZ('MILE', row.pacerOrMileRun, { sex: student.sex, age })
+                            : null;
+                        const cardioStatus = row.cardioTestType === 'PACER' ? pacerStatus : mileStatus;
+                        const cardioTitle = row.cardioTestType === 'PACER'
+                          ? (thresholds?.pacer20mMin !== null && thresholds?.pacer20mMin !== undefined && sexLabel && age !== null
+                              ? `HFZ ${sexLabel} ${age}: min ${thresholds.pacer20mMin}`
+                              : undefined)
+                          : (thresholds?.mileSlowTimeSeconds !== null && thresholds?.mileSlowTimeSeconds !== undefined && sexLabel && age !== null
+                              ? `HFZ ${sexLabel} ${age}: max ${formatSecondsAsTime(thresholds.mileSlowTimeSeconds)}`
+                              : undefined);
+
+                        const pushupStatus =
+                          typeof row.pushups === 'number' && age !== null
+                            ? isHFZ('PUSHUP', row.pushups, { sex: student.sex, age })
+                            : null;
+                        const pushupTitle =
+                          thresholds?.pushUpMin !== undefined && sexLabel && age !== null
+                            ? `HFZ ${sexLabel} ${age}: min ${thresholds.pushUpMin}`
+                            : undefined;
+
+                        const curlupStatus =
+                          typeof row.situps === 'number' && age !== null
+                            ? isHFZ('CURLUP', row.situps, { sex: student.sex, age })
+                            : null;
+                        const curlupTitle =
+                          thresholds?.curlUpMin !== undefined && sexLabel && age !== null
+                            ? `HFZ ${sexLabel} ${age}: min ${thresholds.curlUpMin}`
+                            : undefined;
+
+                        const sitReachStatus =
+                          typeof row.sitAndReach === 'number' && age !== null
+                            ? isHFZ('SITREACH', row.sitAndReach, { sex: student.sex, age })
+                            : null;
+                        const sitReachTitle =
+                          thresholds?.sitReachMin !== undefined && sexLabel && age !== null
+                            ? `HFZ ${sexLabel} ${age}: min ${thresholds.sitReachMin}`
+                            : undefined;
+
+                        const trunkStatus =
+                          typeof row.trunkLift === 'number' && age !== null
+                            ? isHFZ('TRUNK', row.trunkLift, { sex: student.sex, age })
+                            : null;
+                        const trunkTitle =
+                          thresholds?.trunkLiftMin !== undefined && sexLabel && age !== null
+                            ? `HFZ ${sexLabel} ${age}: min ${thresholds.trunkLiftMin}`
+                            : undefined;
+
+                        const shoulderStatus =
+                          age !== null
+                            ? isHFZ('SHOULDER', undefined, {
+                                sex: student.sex,
+                                age,
+                                shoulderLeft: row.shoulderStretchLeft,
+                                shoulderRight: row.shoulderStretchRight,
+                              })
+                            : null;
+                        const shoulderTitle =
+                          sexLabel && age !== null
+                            ? `HFZ ${sexLabel} ${age}: both shoulders`
+                            : undefined;
+
+                        const bmiValue = calculateBMI_US(row.height, row.weight);
+                        const bmiDisplay = typeof bmiValue === 'number' ? bmiValue.toFixed(1) : '';
+                        const bmiRange = age !== null ? getBmiHfzRange(student.sex, age) : null;
+                        const bmiRangeLabel = bmiRange ? formatBmiRangeLabel(bmiRange) : null;
+                        const bmiStatus =
+                          typeof bmiValue === 'number' && age !== null
+                            ? isHFZ('BMI', bmiValue, { sex: student.sex, age })
+                            : null;
+                        const bmiTitle = bmiRangeLabel || undefined;
+
+                        return (
+                          <tr key={student.id} className="bg-white">
+                            <td className="px-3 py-2 text-gray-900 whitespace-nowrap">
+                              {student.firstName} {student.lastName}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="date"
+                                value={row.testDate}
+                                onChange={(e) => handleRowChange(student.id, 'testDate', e.target.value)}
+                                className="w-36 px-2 py-1 border border-gray-300 rounded"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <select
+                                value={row.testSeason}
+                                onChange={(e) => handleRowChange(student.id, 'testSeason', e.target.value as TestSeason)}
+                                className="w-28 px-2 py-1 border border-gray-300 rounded"
+                              >
+                                {SEASON_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2">
+                              <select
+                                value={row.cardioTestType}
+                                onChange={(e) => handleRowChange(student.id, 'cardioTestType', e.target.value as CardioTestType)}
+                                className="w-32 px-2 py-1 border border-gray-300 rounded"
+                              >
+                                {CARDIO_TEST_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  value={row.pacerOrMileRun ?? ''}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      student.id,
+                                      'pacerOrMileRun',
+                                      normalizeNumberInput(e.target.value)
+                                    )
+                                  }
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                />
+                                {renderHfzIndicator(cardioStatus, cardioTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  value={row.pushups ?? ''}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      student.id,
+                                      'pushups',
+                                      normalizeNumberInput(e.target.value)
+                                    )
+                                  }
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                />
+                                {renderHfzIndicator(pushupStatus, pushupTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  value={row.situps ?? ''}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      student.id,
+                                      'situps',
+                                      normalizeNumberInput(e.target.value)
+                                    )
+                                  }
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                />
+                                {renderHfzIndicator(curlupStatus, curlupTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  value={row.sitAndReach ?? ''}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      student.id,
+                                      'sitAndReach',
+                                      normalizeNumberInput(e.target.value)
+                                    )
+                                  }
+                                  className="w-24 px-2 py-1 border border-gray-300 rounded"
+                                />
+                                {renderHfzIndicator(sitReachStatus, sitReachTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  type="number"
+                                  value={row.trunkLift ?? ''}
+                                  onChange={(e) =>
+                                    handleRowChange(
+                                      student.id,
+                                      'trunkLift',
+                                      normalizeNumberInput(e.target.value)
+                                    )
+                                  }
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                />
+                                {renderHfzIndicator(trunkStatus, trunkTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={row.shoulderStretchRight || false}
+                                  onChange={(e) =>
+                                    handleRowChange(student.id, 'shoulderStretchRight', e.target.checked)
+                                  }
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                {renderHfzIndicator(shoulderStatus, shoulderTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={row.shoulderStretchLeft || false}
+                                  onChange={(e) =>
+                                    handleRowChange(student.id, 'shoulderStretchLeft', e.target.checked)
+                                  }
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                {renderHfzIndicator(shoulderStatus, shoulderTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                value={row.height ?? ''}
+                                onChange={(e) =>
+                                  handleRowChange(
+                                    student.id,
+                                    'height',
+                                    normalizeNumberInput(e.target.value)
+                                  )
+                                }
+                                className="w-20 px-2 py-1 border border-gray-300 rounded"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                value={row.weight ?? ''}
+                                onChange={(e) =>
+                                  handleRowChange(
+                                    student.id,
+                                    'weight',
+                                    normalizeNumberInput(e.target.value)
+                                  )
+                                }
+                                className="w-20 px-2 py-1 border border-gray-300 rounded"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-gray-900">{bmiDisplay}</span>
+                                {renderHfzIndicator(bmiStatus, bmiTitle)}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={row.notes ?? ''}
+                                onChange={(e) => handleRowChange(student.id, 'notes', e.target.value)}
+                                className="w-40 px-2 py-1 border border-gray-300 rounded"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className={`text-xs font-medium ${statusColor}`}>
+                                {status === 'saving'
+                                  ? 'Saving…'
+                                  : status === 'error'
+                                    ? 'Couldn’t Save'
+                                    : status === 'dirty'
+                                      ? 'Not Saved Yet'
+                                      : status === 'saved'
+                                        ? 'Saved'
+                                        : ''}
+                              </div>
+                              {(status === 'error' || hasRowError) && (
+                                <div className="text-xs text-red-600 mt-1">
+                                  Couldn’t Save — click Save Class and try again.
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-between shadow">
+                  <div className="text-sm text-gray-600">
+                    Unsaved changes: <span className="font-semibold text-gray-900">{dirtyRowIds.size}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {failedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={retryFailed}
+                        disabled={isSavingClass}
+                        className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold px-4 py-2 rounded"
+                      >
+                        Retry Failed ({failedCount})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={saveClass}
+                      disabled={dirtyRowIds.size === 0 || isSavingClass}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold px-4 py-2 rounded"
+                    >
+                      {isSavingClass ? 'Saving Class…' : 'Save Class'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -660,12 +1436,15 @@ export default function SecondaryAssessmentPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Season</label>
                 <select
                   value={viewTestsSeason}
-                  onChange={(e) => setViewTestsSeason(e.target.value)}
+                    onChange={(e) => setViewTestsSeason(e.target.value as TestSeason | '')}
                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">-- All Seasons --</option>
-                  <option value="Fall">Fall</option>
-                  <option value="Spring">Spring</option>
+                  {SEASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -674,7 +1453,27 @@ export default function SecondaryAssessmentPage() {
               {filteredTests.length === 0 ? (
                 <p className="text-gray-600">No tests found</p>
               ) : (
-                filteredTests.map(test => (
+                filteredTests.map(test => {
+                  const student = students.find(s => s.id === test.studentId);
+                  const hfzOverall = student
+                    ? getHFZResults({
+                        student,
+                        test: {
+                          testDate: test.testDate,
+                          cardioTestType: test.cardioTestType,
+                          pacerOrMileRun: test.pacerOrMileRun,
+                          pushups: test.pushups,
+                          situps: test.situps,
+                          sitAndReach: test.sitAndReach,
+                          trunkLift: test.trunkLift,
+                          height: test.height,
+                          weight: test.weight,
+                        },
+                        standards: standards as StandardsData,
+                      }).overall
+                    : 'NA';
+
+                  return (
                   <div key={test.id} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div>
@@ -684,7 +1483,12 @@ export default function SecondaryAssessmentPage() {
                         <p className="text-sm text-gray-600">
                           {test.testSeason} {new Date(test.testDate).getFullYear()} - {new Date(test.testDate).toLocaleDateString()}
                         </p>
-                        <p className="text-sm text-gray-600">Status: {getHFZStatus(test, students.find(s => s.id === test.studentId)!)}</p>
+                        <div className="text-sm text-gray-600">
+                          <p>
+                            Status: {getStatusLabel(hfzOverall)}
+                          </p>
+                          <HFZRuleInfo />
+                        </div>
                       </div>
                       <button
                         onClick={() => setExpandedTestId(expandedTestId === test.id ? null : test.id)}
@@ -702,14 +1506,15 @@ export default function SecondaryAssessmentPage() {
                           <p className="text-sm font-medium text-gray-700">Sit-ups: <span className="font-normal">{test.situps}</span></p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Sit and Reach: <span className="font-normal">{test.sitAndReach}</span></p>
-                          <p className="text-sm font-medium text-gray-700">Trunk Lift: <span className="font-normal">{test.trunkLift}</span></p>
+                          <p className="text-sm font-medium text-gray-700">Sit and Reach (cm): <span className="font-normal">{test.sitAndReach}</span></p>
+                          <p className="text-sm font-medium text-gray-700">Trunk Lift (in): <span className="font-normal">{test.trunkLift}</span></p>
                           <p className="text-sm font-medium text-gray-700">BMI: <span className="font-normal">{test.bmi?.toFixed(1)}</span></p>
                         </div>
                       </div>
                     )}
                   </div>
-                ))
+                );
+                })
               )}
             </div>
           </div>
@@ -729,9 +1534,12 @@ export default function SecondaryAssessmentPage() {
         )}
 
         <div className="mt-8">
-          <Link href="/teacher/dashboard">
-            <button className="text-blue-600 hover:text-blue-900 font-medium">← Back to Dashboard</button>
-          </Link>
+          <button
+            onClick={confirmNavigateIfDirty}
+            className="text-blue-600 hover:text-blue-900 font-medium"
+          >
+            ← Back to Dashboard
+          </button>
         </div>
       </div>
     </div>

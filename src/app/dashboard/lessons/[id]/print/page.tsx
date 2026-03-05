@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Lesson {
@@ -55,13 +55,8 @@ export default function PrintLessonPage({
     params.then((p) => setId(p.id));
   }, [params]);
 
-  useEffect(() => {
-    if (id) {
-      fetchLesson();
-    }
-  }, [id]);
-
-  const fetchLesson = async () => {
+  const fetchLesson = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
       const response = await fetch(`/api/lessons/${id}`);
@@ -86,7 +81,13 @@ export default function PrintLessonPage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchLesson();
+    }
+  }, [id, fetchLesson]);
 
   const handlePrint = () => {
     window.print();

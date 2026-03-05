@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -86,14 +86,8 @@ export default function EditLessonPage({
     params.then((p) => setId(p.id));
   }, [params]);
 
-  useEffect(() => {
-    if (id) {
-      fetchLesson();
-      fetchResources();
-    }
-  }, [id]);
-
-  const fetchLesson = async () => {
+  const fetchLesson = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
       const response = await fetch(`/api/lessons/${id}`);
@@ -141,9 +135,9 @@ export default function EditLessonPage({
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const fetchResources = async () => {
+  const fetchResources = useCallback(async () => {
     try {
       const response = await fetch('/api/curriculum');
       if (response.ok) {
@@ -153,7 +147,14 @@ export default function EditLessonPage({
     } catch (err) {
       console.error('Failed to load resources:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (id) {
+      fetchLesson();
+      fetchResources();
+    }
+  }, [id, fetchLesson, fetchResources]);
 
   const handleBandChange = (newBand: string) => {
     const newGradeGroup = GRADE_GROUPS[newBand][0];

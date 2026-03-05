@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -29,15 +29,7 @@ export default function LessonBank() {
   const [selectedGrade, setSelectedGrade] = useState("All");
   const [selectedUnit, setSelectedUnit] = useState("All");
 
-  useEffect(() => {
-    fetchLessons();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [lessons, searchQuery, selectedLevel, selectedGrade, selectedUnit]);
-
-  const fetchLessons = async () => {
+  const fetchLessons = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch("/api/lessons");
@@ -50,9 +42,9 @@ export default function LessonBank() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...lessons];
 
     // Search filter
@@ -81,7 +73,15 @@ export default function LessonBank() {
     }
 
     setFilteredLessons(filtered);
-  };
+  }, [lessons, searchQuery, selectedGrade, selectedLevel, selectedUnit]);
+
+  useEffect(() => {
+    fetchLessons();
+  }, [fetchLessons]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Are you sure you want to delete "${title}"?`)) {

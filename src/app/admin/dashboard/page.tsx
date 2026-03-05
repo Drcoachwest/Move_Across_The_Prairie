@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FITNESSGRAM_LABELS } from "@/lib/fitnessgram/labels";
 
 export default function AdminDashboard() {
   return (
@@ -79,7 +80,7 @@ export default function AdminDashboard() {
             <div className="card cursor-pointer hover:shadow-lg transition">
               <div className="text-4xl mb-4">💪</div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                FitnessGram Assessment
+                {FITNESSGRAM_LABELS.assessmentTitle}
               </h3>
               <p className="text-gray-600 mb-4">
                 Import student data, enter fitness test results, and track progress.

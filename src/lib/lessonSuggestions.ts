@@ -795,17 +795,17 @@ const getTeacherSupportPool = (skillFocus: string): TeacherSupportPool => {
 };
 
 export function getCoachingSuggestions(input: CoachingSuggestionInput): string[] {
-  const hasSkillFocus = input.skillFocus && input.skillFocus.trim();
-  const hasUnit = input.unit && input.unit.trim();
+  const skillFocus = input.skillFocus?.trim();
+  const unit = input.unit?.trim();
 
-  if (hasSkillFocus) {
-    const pool = getTeacherSupportPool(input.skillFocus.trim());
+  if (skillFocus) {
+    const pool = getTeacherSupportPool(skillFocus);
     const combined = [...pool.coaching, ...DEFAULT_TEACHER_SUPPORT.coaching];
     return Array.from(new Set(combined.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
   }
 
-  if (hasUnit) {
-    const focusFromUnit = resolveSkillFocus(input.band, input.unit.trim());
+  if (unit) {
+    const focusFromUnit = resolveSkillFocus(input.band, unit);
     const pool = getTeacherSupportPool(focusFromUnit);
     const combined = [...pool.coaching, ...DEFAULT_TEACHER_SUPPORT.coaching];
     return Array.from(new Set(combined.map((item) => item.trim()).filter(Boolean))).slice(0, 8);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { FITNESSGRAM_LABELS } from '@/lib/fitnessgram/labels';
 
 export default function TeacherDashboard() {
   return (
@@ -18,7 +19,7 @@ export default function TeacherDashboard() {
           <div className="flex items-center mb-4">
             <div className="text-4xl mr-4">🏃</div>
             <h3 className="text-lg font-semibold text-gray-900">
-              FitnessGram Assessment
+              {FITNESSGRAM_LABELS.assessmentTitle}
             </h3>
           </div>
           <p className="text-gray-600">

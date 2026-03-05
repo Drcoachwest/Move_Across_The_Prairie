@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface AdminLog {
   id: string;
@@ -29,7 +29,7 @@ export default function ActivityLogs() {
     [total, pageSize]
   );
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -61,11 +61,11 @@ export default function ActivityLogs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [actionFilter, adminFilter, fromDate, page, pageSize, search, toDate]);
 
   useEffect(() => {
     fetchLogs();
-  }, [page, pageSize]);
+  }, [fetchLogs]);
 
   const handleApplyFilters = () => {
     setPage(1);

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { SEASON_OPTIONS, TEST_SEASON, type TestSeason } from '@/lib/fitnessgram/constants';
+import { calculateBMI_US } from '@/lib/fitnessgram/bmi';
 
 interface Student {
   id: string;
@@ -20,7 +22,7 @@ interface Student {
 interface FormData {
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -37,7 +39,7 @@ interface TestData {
   id: string;
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   testYear: number;
   pacerOrMileRun?: number;
   pushups?: number;
@@ -82,13 +84,13 @@ export default function TeacherAssessmentPage() {
   const [classSummaryTeacher, setClassSummaryTeacher] = useState<string>('');
   const [showFilters, setShowFilters] = useState(true);
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
-  const [filterSeason, setFilterSeason] = useState<'Fall' | 'Spring'>('Fall');
+  const [filterSeason, setFilterSeason] = useState<TestSeason>(TEST_SEASON.Fall);
   const [filterSchool, setFilterSchool] = useState<string>('');
   const [filterClassroomTeacher, setFilterClassroomTeacher] = useState<string>('');
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
-    testSeason: 'Fall',
+    testSeason: TEST_SEASON.Fall,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -105,7 +107,6 @@ export default function TeacherAssessmentPage() {
         if (data.teacher) {
           setTeacherInfo(data.teacher);
           loadStudents();
-          loadTests();
         }
       } catch (err) {
         router.push('/auth/teacher-signin');
@@ -131,16 +132,33 @@ export default function TeacherAssessmentPage() {
     }
   };
 
-  const loadTests = async () => {
+  const loadTests = useCallback(async (classroomTeacher: string) => {
     try {
-      const response = await fetch('/api/admin/assessment');
+      if (!classroomTeacher) {
+        setTests([]);
+        return;
+      }
+
+      const gradeForTeacher = students.find(
+        (s) => s.classroomTeacher === classroomTeacher
+      )?.currentGrade;
+
+      if (!gradeForTeacher) {
+        setTests([]);
+        return;
+      }
+
+      const params = new URLSearchParams({ grade: String(gradeForTeacher) });
+      params.set('classroomTeacher', classroomTeacher);
+
+      const response = await fetch(`/api/teacher/assessment?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to load tests');
       const data = await response.json();
       setTests(data.tests || []);
     } catch (err) {
       console.error('Failed to load tests:', err);
     }
-  };
+  }, [students]);
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -189,10 +207,10 @@ export default function TeacherAssessmentPage() {
       setFormData({ 
         studentId: '', 
         testDate: new Date().toISOString().split('T')[0], 
-        testSeason: 'Fall' 
+        testSeason: TEST_SEASON.Fall 
       });
       // Don't clear selectedClassroomTeacher - keep it selected
-      loadTests();
+      loadTests(selectedClassroomTeacher);
       // Keep success message visible longer so user can see it
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: any) {
@@ -219,10 +237,18 @@ export default function TeacherAssessmentPage() {
     )
   ).sort();
 
-  const calculateBMI = (height: number | undefined, weight: number | undefined) => {
-    if (!height || !weight) return undefined;
-    return Math.round(((weight / (height * height)) * 703) * 10) / 10;
-  };
+  const heightWarning =
+    typeof formData.height === 'number' && (formData.height < 30 || formData.height > 90);
+  const weightWarning =
+    typeof formData.weight === 'number' && (formData.weight < 30 || formData.weight > 400);
+
+  useEffect(() => {
+    if (selectedClassroomTeacher) {
+      loadTests(selectedClassroomTeacher);
+    } else {
+      setTests([]);
+    }
+  }, [selectedClassroomTeacher, loadTests]);
 
   if (loading) {
     return (
@@ -304,11 +330,14 @@ export default function TeacherAssessmentPage() {
                 </label>
                 <select
                   value={filterSeason}
-                  onChange={(e) => setFilterSeason(e.target.value as 'Fall' | 'Spring')}
+                  onChange={(e) => setFilterSeason(e.target.value as TestSeason)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="Fall">Fall</option>
-                  <option value="Spring">Spring</option>
+                  {SEASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -601,8 +630,11 @@ export default function TeacherAssessmentPage() {
                                         onChange={handleFormChange}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                       >
-                                        <option value="Fall">Fall</option>
-                                        <option value="Spring">Spring</option>
+                                        {SEASON_OPTIONS.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
                                       </select>
                                     </div>
                                   </div>
@@ -652,7 +684,7 @@ export default function TeacherAssessmentPage() {
                                       </div>
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Sit and Reach (inches)
+                                          Sit and Reach (cm)
                                         </label>
                                         <input
                                           type="number"
@@ -660,13 +692,13 @@ export default function TeacherAssessmentPage() {
                                           name="sitAndReach"
                                           value={formData.sitAndReach || ''}
                                           onChange={handleFormChange}
-                                          placeholder="inches"
+                                          placeholder="cm"
                                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
                                       </div>
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Height (inches)
+                                          Height (in)
                                         </label>
                                         <input
                                           type="number"
@@ -677,10 +709,15 @@ export default function TeacherAssessmentPage() {
                                           placeholder="inches"
                                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
+                                        {heightWarning && (
+                                          <p className="text-xs text-amber-600 mt-1">
+                                            Height looks out of range (30–90 in). Please verify.
+                                          </p>
+                                        )}
                                       </div>
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Weight (pounds)
+                                          Weight (lb)
                                         </label>
                                         <input
                                           type="number"
@@ -691,6 +728,11 @@ export default function TeacherAssessmentPage() {
                                           placeholder="pounds"
                                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
+                                        {weightWarning && (
+                                          <p className="text-xs text-amber-600 mt-1">
+                                            Weight looks out of range (30–400 lb). Please verify.
+                                          </p>
+                                        )}
                                       </div>
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -698,13 +740,13 @@ export default function TeacherAssessmentPage() {
                                         </label>
                                         <div className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700">
                                           {formData.height && formData.weight
-                                            ? calculateBMI(formData.height, formData.weight)
+                                            ? calculateBMI_US(formData.height, formData.weight)
                                             : '-'}
                                         </div>
                                       </div>
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                                          Trunk Lift (inches)
+                                          Trunk Lift (in)
                                         </label>
                                         <input
                                           type="number"
@@ -828,8 +870,8 @@ export default function TeacherAssessmentPage() {
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Pacer/Mile</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Pushups</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Situps</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Height</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Weight</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Height (in)</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Weight (lb)</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">BMI</th>
                       </tr>
                     </thead>
@@ -856,7 +898,7 @@ export default function TeacherAssessmentPage() {
                             <td className="px-4 py-2">{test.situps || '-'}</td>
                             <td className="px-4 py-2">{test.height ? `${test.height}"` : '-'}</td>
                             <td className="px-4 py-2">{test.weight ? `${test.weight} lbs` : '-'}</td>
-                            <td className="px-4 py-2">{calculateBMI(test.height, test.weight) || '-'}</td>
+                            <td className="px-4 py-2">{calculateBMI_US(test.height, test.weight) || '-'}</td>
                           </tr>
                         ))}
                     </tbody>

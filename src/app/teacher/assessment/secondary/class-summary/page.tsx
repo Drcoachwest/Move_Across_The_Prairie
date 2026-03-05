@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { TEST_SEASON, type CardioTestType, type Sex, type TestSeason } from '@/lib/fitnessgram/constants';
+import { getHFZResults } from '@/lib/fitnessgram/hfz';
+import HFZRuleInfo from '@/components/fitnessgram/HFZRuleInfo';
 
 interface ClassPeriod {
   id: string;
@@ -14,7 +17,7 @@ interface Student {
   districtId: string;
   firstName: string;
   lastName: string;
-  sex: string;
+  sex: Sex;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
@@ -25,9 +28,9 @@ interface TestData {
   id: string;
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   testYear: number;
-  cardioTestType?: 'PACER' | 'MILE';
+  cardioTestType?: CardioTestType;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -54,12 +57,12 @@ interface StudentRow {
   student: Student;
   fallTest?: TestData;
   springTest?: TestData;
-  fallHFZ?: 'HFZ' | 'Needs Improvement';
-  springHFZ?: 'HFZ' | 'Needs Improvement';
+  fallHFZ?: 'HFZ' | 'NI' | 'NA';
+  springHFZ?: 'HFZ' | 'NI' | 'NA';
   improvementStatus?: string;
 }
 
-type StandardsRange = { min?: number; max?: number };
+type StandardsRange = { min?: number | null; max?: number | null };
 type StandardsData = {
   boys: {
     cardio: Record<string, { pacer20?: StandardsRange; bmi?: StandardsRange }>;
@@ -75,6 +78,21 @@ type StandardsData = {
 import standards from '@/lib/fitnessgram-standards.json';
 
 export default function SecondaryClassSummaryPage() {
+  const STORAGE_SELECTED_PERIOD_ID = 'fg_selected_period_id';
+  const safeGet = (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const safeSet = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // ignore storage errors
+    }
+  };
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [classPeriods, setClassPeriods] = useState<ClassPeriod[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -111,7 +129,7 @@ export default function SecondaryClassSummaryPage() {
     getTeacherInfo();
   }, []);
 
-  const loadClassPeriods = async () => {
+  const loadClassPeriods = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/teacher/periods');
@@ -119,7 +137,20 @@ export default function SecondaryClassSummaryPage() {
       const data = await response.json();
       setClassPeriods(data.periods || []);
       if (data.periods && data.periods.length > 0) {
-        setSelectedPeriod(data.periods[0].id);
+        const storedPeriodId = typeof window !== 'undefined' ? safeGet(STORAGE_SELECTED_PERIOD_ID) : null;
+        const hasStored = storedPeriodId && data.periods.some((p: ClassPeriod) => p.id === storedPeriodId);
+        if (hasStored && storedPeriodId) {
+          setSelectedPeriod(storedPeriodId);
+        } else {
+          setSelectedPeriod(data.periods[0].id);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(STORAGE_SELECTED_PERIOD_ID);
+            } catch {
+              // ignore storage errors
+            }
+          }
+        }
       }
       setError('');
     } catch (err) {
@@ -127,7 +158,7 @@ export default function SecondaryClassSummaryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const loadStudentsForPeriod = async (periodId: string) => {
     try {
@@ -144,9 +175,9 @@ export default function SecondaryClassSummaryPage() {
     }
   };
 
-  const loadTests = async () => {
+  const loadTests = async (periodId: string) => {
     try {
-      const response = await fetch('/api/admin/assessment');
+      const response = await fetch(`/api/teacher/assessment?periodId=${encodeURIComponent(periodId)}`);
       if (!response.ok) throw new Error('Failed to load tests');
       const data = await response.json();
       setTests(data.tests || []);
@@ -158,76 +189,72 @@ export default function SecondaryClassSummaryPage() {
   useEffect(() => {
     if (teacherInfo) {
       loadClassPeriods();
-      loadTests();
     }
-  }, [teacherInfo]);
+  }, [teacherInfo, loadClassPeriods]);
 
   useEffect(() => {
     if (selectedPeriod && teacherInfo) {
       loadStudentsForPeriod(selectedPeriod);
+      loadTests(selectedPeriod);
     }
   }, [selectedPeriod, teacherInfo]);
 
-  const calculateAge = (dateOfBirth: string, testDate: string) => {
-    if (!dateOfBirth || !testDate) return undefined;
-    const dob = new Date(dateOfBirth);
-    const test = new Date(testDate);
-    let age = test.getFullYear() - dob.getFullYear();
-    const monthDiff = test.getMonth() - dob.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && test.getDate() < dob.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  const getHFZStatus = (test: TestData, student: Student): 'HFZ' | 'Needs Improvement' => {
-    const age = calculateAge(student.dateOfBirth, test.testDate);
-    if (age === undefined) return 'Needs Improvement';
-
-    const sex = student.sex.toUpperCase();
-    const ageKey = age.toString();
-    const standardsData = standards as StandardsData;
-    const sexData = sex === 'M' ? standardsData.boys : standardsData.girls;
-
-    const components: (keyof typeof test)[] = ['pacerOrMileRun', 'pushups', 'situps', 'sitAndReach', 'trunkLift'];
-    let hfzCount = 0;
-
-    for (const component of components) {
-      const value = test[component];
-      if (value === undefined || value === null) continue;
-
-      let isHFZ = false;
-      if (component === 'pacerOrMileRun') {
-        const standard = sexData.cardio[ageKey]?.pacer20;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'pushups') {
-        const standard = sexData.muscular[ageKey]?.pushup90;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'situps') {
-        const standard = sexData.muscular[ageKey]?.curlup;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'sitAndReach') {
-        const standard = sexData.muscular[ageKey]?.sitAndReach;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
-      } else if (component === 'trunkLift') {
-        const standard = sexData.muscular[ageKey]?.trunkLift;
-        if (standard && standard.min !== undefined && value >= standard.min) isHFZ = true;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (selectedPeriod) {
+      safeSet(STORAGE_SELECTED_PERIOD_ID, selectedPeriod);
+    } else {
+      try {
+        localStorage.removeItem(STORAGE_SELECTED_PERIOD_ID);
+      } catch {
+        // ignore storage errors
       }
-
-      if (isHFZ) hfzCount++;
     }
+  }, [selectedPeriod]);
 
-    return hfzCount >= 4 ? 'HFZ' : 'Needs Improvement';
+  const getStatusLabel = (status: 'HFZ' | 'NI' | 'NA') => {
+    if (status === 'HFZ') return 'HFZ';
+    if (status === 'NI') return 'Needs Improvement';
+    return 'No Data';
   };
 
   const getImprovementStatus = (fallTest: TestData | undefined, springTest: TestData | undefined, student: Student): string => {
     if (!fallTest || !springTest) return 'No Data';
 
-    const fallHFZ = getHFZStatus(fallTest, student);
-    const springHFZ = getHFZStatus(springTest, student);
+    const fallHFZ = getHFZResults({
+      student,
+      test: {
+        testDate: fallTest.testDate,
+        cardioTestType: fallTest.cardioTestType,
+        pacerOrMileRun: fallTest.pacerOrMileRun,
+        pushups: fallTest.pushups,
+        situps: fallTest.situps,
+        sitAndReach: fallTest.sitAndReach,
+        trunkLift: fallTest.trunkLift,
+        height: fallTest.height,
+        weight: fallTest.weight,
+      },
+      standards: standards as StandardsData,
+    }).overall;
+
+    const springHFZ = getHFZResults({
+      student,
+      test: {
+        testDate: springTest.testDate,
+        cardioTestType: springTest.cardioTestType,
+        pacerOrMileRun: springTest.pacerOrMileRun,
+        pushups: springTest.pushups,
+        situps: springTest.situps,
+        sitAndReach: springTest.sitAndReach,
+        trunkLift: springTest.trunkLift,
+        height: springTest.height,
+        weight: springTest.weight,
+      },
+      standards: standards as StandardsData,
+    }).overall;
 
     // Moved from Needs Improvement to HFZ
-    if (fallHFZ === 'Needs Improvement' && springHFZ === 'HFZ') {
+    if (fallHFZ === 'NI' && springHFZ === 'HFZ') {
       return '✅ Significant Improvement';
     }
 
@@ -257,7 +284,7 @@ export default function SecondaryClassSummaryPage() {
     }
 
     // Declined
-    if (fallHFZ === 'HFZ' && springHFZ === 'Needs Improvement') {
+    if (fallHFZ === 'HFZ' && springHFZ === 'NI') {
       return '⬇️ Declined';
     }
 
@@ -267,15 +294,47 @@ export default function SecondaryClassSummaryPage() {
 
   const buildSummaryRows = (): StudentRow[] => {
     return students.map(student => {
-      const fallTest = tests.find(t => t.studentId === student.id && t.testSeason === 'Fall');
-      const springTest = tests.find(t => t.studentId === student.id && t.testSeason === 'Spring');
+      const fallTest = tests.find(t => t.studentId === student.id && t.testSeason === TEST_SEASON.Fall);
+      const springTest = tests.find(t => t.studentId === student.id && t.testSeason === TEST_SEASON.Spring);
 
       return {
         student,
         fallTest,
         springTest,
-        fallHFZ: fallTest ? getHFZStatus(fallTest, student) : undefined,
-        springHFZ: springTest ? getHFZStatus(springTest, student) : undefined,
+        fallHFZ: fallTest
+          ? getHFZResults({
+              student,
+              test: {
+                testDate: fallTest.testDate,
+                cardioTestType: fallTest.cardioTestType,
+                pacerOrMileRun: fallTest.pacerOrMileRun,
+                pushups: fallTest.pushups,
+                situps: fallTest.situps,
+                sitAndReach: fallTest.sitAndReach,
+                trunkLift: fallTest.trunkLift,
+                height: fallTest.height,
+                weight: fallTest.weight,
+              },
+              standards: standards as StandardsData,
+            }).overall
+          : undefined,
+        springHFZ: springTest
+          ? getHFZResults({
+              student,
+              test: {
+                testDate: springTest.testDate,
+                cardioTestType: springTest.cardioTestType,
+                pacerOrMileRun: springTest.pacerOrMileRun,
+                pushups: springTest.pushups,
+                situps: springTest.situps,
+                sitAndReach: springTest.sitAndReach,
+                trunkLift: springTest.trunkLift,
+                height: springTest.height,
+                weight: springTest.weight,
+              },
+              standards: standards as StandardsData,
+            }).overall
+          : undefined,
         improvementStatus: getImprovementStatus(fallTest, springTest, student),
       };
     });
@@ -321,6 +380,9 @@ export default function SecondaryClassSummaryPage() {
 
         {selectedPeriod && (
           <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 pt-4">
+              <HFZRuleInfo />
+            </div>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
@@ -342,12 +404,12 @@ export default function SecondaryClassSummaryPage() {
                     </td>
                     <td className="px-6 py-4 text-center text-sm">
                       <span className={`font-medium ${row.fallHFZ === 'HFZ' ? 'text-green-600' : 'text-orange-600'}`}>
-                        {row.fallHFZ || '—'}
+                        {row.fallHFZ ? getStatusLabel(row.fallHFZ) : '—'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center text-sm">
                       <span className={`font-medium ${row.springHFZ === 'HFZ' ? 'text-green-600' : 'text-orange-600'}`}>
-                        {row.springHFZ || '—'}
+                        {row.springHFZ ? getStatusLabel(row.springHFZ) : '—'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">

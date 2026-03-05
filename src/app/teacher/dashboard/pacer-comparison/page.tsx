@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import standards from '@/lib/fitnessgram-standards.json';
 import {
   calculateImprovement,
   calculateClassImprovementStats,
@@ -9,13 +8,22 @@ import {
   PacerComparison,
   ClassImprovementStats,
 } from '@/lib/improvement-tracker';
+import standards from '@/lib/fitnessgram-standards.json';
+import { getHFZResults } from '@/lib/fitnessgram/hfz';
+import {
+  CARDIO_TEST_TYPE,
+  TEST_SEASON,
+  type CardioTestType,
+  type Sex,
+  type TestSeason,
+} from '@/lib/fitnessgram/constants';
 
 interface Student {
   id: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
-  sex: string;
+  sex: Sex;
   currentGrade: number;
   classroomTeacher?: string;
 }
@@ -23,8 +31,9 @@ interface Student {
 interface TestData {
   id: string;
   studentId: string;
-  testSeason: 'Fall' | 'Spring';
-  cardioTestType?: 'PACER' | 'MILE';
+  testDate?: string;
+  testSeason: TestSeason;
+  cardioTestType?: CardioTestType;
   pacerOrMileRun?: number;
 }
 
@@ -45,7 +54,7 @@ export default function PacerComparisonPage() {
   const [error, setError] = useState<string | null>(null);
   const [classStats, setClassStats] = useState<ClassImprovementStats | null>(null);
   const [nonPacerCount, setNonPacerCount] = useState(0);
-  const [teacherInfo, setTeacherInfo] = useState<any>(null);
+  const [, setTeacherInfo] = useState<any>(null);
 
   // Fetch teacher info and verify session
   useEffect(() => {
@@ -81,7 +90,8 @@ export default function PacerComparisonPage() {
       const studentsData = await studentsResponse.json();
 
       // Load all assessment/test data
-      const testsResponse = await fetch('/api/admin/assessment');
+      const testsParams = new URLSearchParams({ grade: selectedGrade.toString() });
+      const testsResponse = await fetch(`/api/teacher/assessment?${testsParams.toString()}`);
       if (!testsResponse.ok) throw new Error('Failed to load tests');
       const testsData = await testsResponse.json();
 
@@ -96,9 +106,9 @@ export default function PacerComparisonPage() {
         if (!testsByStudent[test.studentId]) {
           testsByStudent[test.studentId] = {};
         }
-        if (test.testSeason === 'Fall') {
+        if (test.testSeason === TEST_SEASON.Fall) {
           testsByStudent[test.studentId].fall = test;
-        } else if (test.testSeason === 'Spring') {
+        } else if (test.testSeason === TEST_SEASON.Spring) {
           testsByStudent[test.studentId].spring = test;
         }
       });
@@ -113,15 +123,15 @@ export default function PacerComparisonPage() {
       const comparisons: StudentComparison[] = gradeStudents
         .map((student: Student) => {
           const tests = testsByStudent[student.id] || {};
-          const fallRaw = tests.fall?.pacerOrMileRun;
+          const fallRaw = tests.fall?.pacerOrMileRun; 
           const springRaw = tests.spring?.pacerOrMileRun;
-          const fallIsPacer = tests.fall?.cardioTestType === 'PACER' || (tests.fall?.cardioTestType === undefined && tests.fall !== undefined);
-          const springIsPacer = tests.spring?.cardioTestType === 'PACER' || (tests.spring?.cardioTestType === undefined && tests.spring !== undefined);
+          const fallIsPacer = tests.fall?.cardioTestType === CARDIO_TEST_TYPE.PACER || (tests.fall?.cardioTestType === undefined && tests.fall !== undefined);
+          const springIsPacer = tests.spring?.cardioTestType === CARDIO_TEST_TYPE.PACER || (tests.spring?.cardioTestType === undefined && tests.spring !== undefined);
 
           const fallLaps = fallIsPacer && isWholeNumber(fallRaw) ? fallRaw : undefined;
           const springLaps = springIsPacer && isWholeNumber(springRaw) ? springRaw : undefined;
 
-// Show which students have decimal values (excluded from PACER)
+          // Show which students have decimal values (excluded from PACER) 
       if ((fallRaw && !isWholeNumber(fallRaw)) || (springRaw && !isWholeNumber(springRaw))) {
         console.log(
           `⚠️ ${student.firstName} ${student.lastName} - EXCLUDED:`,
@@ -134,23 +144,40 @@ export default function PacerComparisonPage() {
           if (fallRaw !== undefined && (!isWholeNumber(fallRaw) || !fallIsPacer)) nonPacer += 1;
           if (springRaw !== undefined && (!isWholeNumber(springRaw) || !springIsPacer)) nonPacer += 1;
 
-          // Get standards for student's age and sex
-          const age = calculateAge(student.dateOfBirth);
-          const sexKey = student.sex?.toLowerCase() === 'f' ? 'girls' : 'boys';
-          const fitnessGramStandards = standards as any;
-          const ageStandards = fitnessGramStandards[sexKey]?.cardio?.[age.toString()];
-          const pacerStandard = ageStandards?.pacer20 || { min: 0, max: 100 };
+          const fallHFZ = fallIsPacer && typeof fallRaw === 'number'
+            ? getHFZResults({
+                student,
+                test: {
+                  testDate: tests.fall?.testDate,
+                  cardioTestType: tests.fall?.cardioTestType ?? CARDIO_TEST_TYPE.PACER,
+                  pacerOrMileRun: fallRaw,
+                },
+                standards: standards as any,
+              }).components.cardio
+            : 'NA';
 
-          const comparison = calculateImprovement(fallLaps, springLaps, pacerStandard.min, pacerStandard.max);
+          const springHFZ = springIsPacer && typeof springRaw === 'number'
+            ? getHFZResults({
+                student,
+                test: {
+                  testDate: tests.spring?.testDate,
+                  cardioTestType: tests.spring?.cardioTestType ?? CARDIO_TEST_TYPE.PACER,
+                  pacerOrMileRun: springRaw,
+                },
+                standards: standards as any,
+              }).components.cardio
+            : 'NA';
+
+          const comparison = calculateImprovement(fallLaps, springLaps, fallHFZ, springHFZ);
 
           return {
             student,
             fallTest: tests.fall,
             springTest: tests.spring,
-            comparison,
+            comparison, 
           };
         })
-        .filter(sc => sc.comparison.fallLaps || sc.comparison.springLaps); // Only show students with test data
+        .filter((sc: StudentComparison) => sc.comparison.fallLaps || sc.comparison.springLaps); // Only show students with test data
 
       // Extract unique classroom teachers for filtering
       const teachers = Array.from(
@@ -202,17 +229,6 @@ export default function PacerComparisonPage() {
       const stats = calculateClassImprovementStats(comparisonsWithBoth.map(c => c.comparison));
       setClassStats(stats);
     }
-  };
-
-  const calculateAge = (dateOfBirth: string): number => {
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
   };
 
   return (

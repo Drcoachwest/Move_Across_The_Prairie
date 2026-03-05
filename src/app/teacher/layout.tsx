@@ -59,23 +59,23 @@ export default function TeacherLayout({
     <div className="min-h-screen bg-gray-50">
       {/* Teacher Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-6 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-0.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Link href="/teacher/dashboard" className="flex items-center hover:opacity-80 transition">
                 <Image
                   src="/images/ChatGPT%20Image%20Jan%2029,%202026,%2009_16_31%20AM.png"
                   alt="Move Across the Prairie"
-                  width={180}
-                  height={180}
-                  className="h-[120px] sm:h-[180px] w-auto"
+                  width={140}
+                  height={140}
+                  className="h-10 sm:h-12 w-auto"
                   priority
                 />
               </Link>
               {teacherInfo && (
                 <div className="flex flex-col justify-center">
-                  <p className="font-medium text-gray-900 text-lg sm:text-xl">{teacherInfo.name}</p>
-                  <p className="text-xs sm:text-sm text-gray-600">{teacherInfo.school}</p>
+                  <p className="font-medium text-gray-900 text-base sm:text-lg leading-tight">{teacherInfo.name}</p>
+                  <p className="hidden sm:block text-xs text-gray-500">{teacherInfo.school}</p>
                 </div>
               )}
             </div>

@@ -211,6 +211,7 @@ model FitnesGramTest {
   studentId         String
   student           Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   school            String
+  measurementSystem String     @default("US") // Units for this test (US = inches/lb)
   testDate          DateTime
   testSeason        String     // 'Fall' or 'Spring'
   testYear          Int        // 2024, 2025, etc.
@@ -223,10 +224,10 @@ model FitnesGramTest {
   sitAndReach       Float?     // flexibility test, distance in cm
   shoulderStretchRight Boolean? // pass/fail
   shoulderStretchLeft Boolean?  // pass/fail
-  height            Float?     // in cm
-  weight            Float?     // in kg
-  bmi               Float?     // calculated from height/weight
-  trunkLift         Float?     // distance in cm
+  height            Float?     // in inches
+  weight            Float?     // in pounds
+  bmi               Float?     // calculated from inches/pounds using US BMI formula
+  trunkLift         Float?     // distance in inches
   
   // Scoring
   healthZone        String?    // Healthy Fitness Zone or Needs Improvement

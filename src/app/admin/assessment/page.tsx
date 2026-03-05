@@ -3,13 +3,22 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import {
+  SEASON_OPTIONS,
+  TEST_SEASON,
+  isTestSeason,
+  type Sex,
+  type TestSeason,
+} from '@/lib/fitnessgram/constants';
+import { calculateBMI_US } from '@/lib/fitnessgram/bmi';
+import { FITNESSGRAM_LABELS } from '@/lib/fitnessgram/labels';
 
 interface Student {
   id: string;
   districtId: string;
   firstName: string;
   lastName: string;
-  sex: string;
+  sex: Sex;
   dateOfBirth: string;
   currentGrade: number;
   currentSchool: string;
@@ -20,7 +29,7 @@ interface Student {
 interface FormData {
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   pacerOrMileRun?: number;
   pushups?: number;
   situps?: number;
@@ -37,7 +46,7 @@ interface TestData {
   id: string;
   studentId: string;
   testDate: string;
-  testSeason: 'Fall' | 'Spring';
+  testSeason: TestSeason;
   testYear: number;
   pacerOrMileRun?: number;
   pushups?: number;
@@ -76,7 +85,7 @@ export default function AssessmentPage() {
   const [formData, setFormData] = useState<FormData>({
     studentId: '',
     testDate: new Date().toISOString().split('T')[0],
-    testSeason: 'Fall',
+    testSeason: TEST_SEASON.Fall,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -155,16 +164,20 @@ export default function AssessmentPage() {
     }));
   };
 
-  const calculateBMI = (height?: number, weight?: number) => {
-    if (!height || !weight) return undefined;
-    // BMI = (weight in pounds / (height in inches)^2) * 703
-    return (weight / (height * height)) * 703;
-  };
+  const heightWarning =
+    typeof formData.height === 'number' && (formData.height < 30 || formData.height > 90);
+  const weightWarning =
+    typeof formData.weight === 'number' && (formData.weight < 30 || formData.weight > 400);
 
   const handleSubmitTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.studentId) {
       setError('Please select a student');
+      return;
+    }
+
+    if (!isTestSeason(formData.testSeason)) {
+      setError(`Test season must be ${SEASON_OPTIONS.map((o) => o.value).join(' or ')}`);
       return;
     }
 
@@ -177,7 +190,7 @@ export default function AssessmentPage() {
       const payload = {
         ...formData,
         testYear,
-        bmi: calculateBMI(formData.height, formData.weight),
+        bmi: calculateBMI_US(formData.height, formData.weight),
       };
 
       const response = await fetch('/api/admin/assessment', {
@@ -195,7 +208,7 @@ export default function AssessmentPage() {
       setFormData({
         studentId: '',
         testDate: new Date().toISOString().split('T')[0],
-        testSeason: 'Fall',
+        testSeason: TEST_SEASON.Fall,
       });
       setSelectedClassroomTeacher('');
       
@@ -265,7 +278,7 @@ export default function AssessmentPage() {
                 Admin Dashboard
               </Link>
               <span>/</span>
-              <span className="font-medium text-gray-900">FitnessGram Assessment</span>
+              <span className="font-medium text-gray-900">{FITNESSGRAM_LABELS.assessmentTitle}</span>
             </div>
           </nav>
         </div>
@@ -402,7 +415,7 @@ export default function AssessmentPage() {
         {/* Enter Test Data Tab */}
         {activeTab === 'enter' && (
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold mb-6">Enter FitnessGram Test Data</h2>
+            <h2 className="text-2xl font-bold mb-6">{FITNESSGRAM_LABELS.assessmentEntryTitle}</h2>
 
             {loading ? (
               <p className="text-gray-600">Loading students...</p>
@@ -482,8 +495,11 @@ export default function AssessmentPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       required
                     >
-                      <option value="Fall">Fall</option>
-                      <option value="Spring">Spring</option>
+                      {SEASON_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -559,7 +575,7 @@ export default function AssessmentPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Height (inches)
+                        Height (in)
                       </label>
                       <input
                         type="number"
@@ -569,11 +585,16 @@ export default function AssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      {heightWarning && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Height looks out of range (30–90 in). Please verify.
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Weight (pounds)
+                        Weight (lb)
                       </label>
                       <input
                         type="number"
@@ -583,11 +604,16 @@ export default function AssessmentPage() {
                         onChange={handleFormChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
+                      {weightWarning && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Weight looks out of range (30–400 lb). Please verify.
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Trunk Lift (inches)
+                        Trunk Lift (in)
                       </label>
                       <input
                         type="number"
@@ -634,7 +660,7 @@ export default function AssessmentPage() {
                   {formData.height && formData.weight && (
                     <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <p className="text-sm font-medium text-gray-900">
-                        Calculated BMI: {calculateBMI(formData.height, formData.weight)?.toFixed(1)}
+                        Calculated BMI: {calculateBMI_US(formData.height, formData.weight)?.toFixed(1)}
                       </p>
                     </div>
                   )}
@@ -749,8 +775,8 @@ export default function AssessmentPage() {
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Grade</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Test Date</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Season</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Height</th>
-                        <th className="px-4 py-2 text-left font-medium text-gray-700">Weight</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Height (in)</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-700">Weight (lb)</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">BMI</th>
                         <th className="px-4 py-2 text-left font-medium text-gray-700">Action</th>
                       </tr>

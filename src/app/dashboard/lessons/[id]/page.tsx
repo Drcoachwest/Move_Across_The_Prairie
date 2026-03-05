@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -54,13 +54,8 @@ export default function LessonDetail({
     params.then((p) => setId(p.id));
   }, [params]);
 
-  useEffect(() => {
-    if (id) {
-      fetchLesson();
-    }
-  }, [id]);
-
-  const fetchLesson = async () => {
+  const fetchLesson = useCallback(async () => {
+    if (!id) return;
     try {
       setLoading(true);
       const response = await fetch(`/api/lessons/${id}`);
@@ -85,7 +80,13 @@ export default function LessonDetail({
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchLesson();
+    }
+  }, [id, fetchLesson]);
 
   const handleDelete = async () => {
     if (!lesson) return;

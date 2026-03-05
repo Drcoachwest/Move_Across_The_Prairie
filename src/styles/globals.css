@@ -36,3 +36,30 @@ body {
 .card {
   @apply bg-white rounded-lg shadow-md p-6;
 }
+
+/* FitnessGram entry tables: sticky header + first column */
+.fitnessgram-entry-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-color: #f3f4f6;
+}
+
+.fitnessgram-entry-table th:first-child,
+.fitnessgram-entry-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background-color: #ffffff;
+}
+
+.fitnessgram-entry-table thead th:first-child {
+  z-index: 40;
+  background-color: #f3f4f6;
+}
+
+.fitnessgram-entry-table-compact th,
+.fitnessgram-entry-table-compact td {
+  padding-top: 0.25rem !important;
+  padding-bottom: 0.25rem !important;
+}

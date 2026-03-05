@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 interface LessonPlan {
@@ -33,11 +33,7 @@ export default function ViewLessonPlan() {
   const [notFound, setNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchLessonPlan();
-  }, [lessonPlanId]);
-
-  const fetchLessonPlan = async () => {
+  const fetchLessonPlan = useCallback(async () => {
     try {
       // console.log("Fetching lesson plan with ID:", lessonPlanId);
       const response = await fetch(`/api/lessons/${lessonPlanId}`);
@@ -52,7 +48,11 @@ export default function ViewLessonPlan() {
       console.error("Error fetching lesson plan:", error);
       setNotFound(true);
     }
-  };
+  }, [lessonPlanId]);
+
+  useEffect(() => {
+    fetchLessonPlan();
+  }, [fetchLessonPlan]);
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this lesson plan? This action cannot be undone.")) {

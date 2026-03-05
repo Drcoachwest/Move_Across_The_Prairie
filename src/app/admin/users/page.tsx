@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface Teacher {
   id: string;
@@ -26,18 +26,10 @@ export default function Users() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    fetchTeachers();
-  }, []);
-
-  useEffect(() => {
-    filterAndSortTeachers();
-  }, [teachers, searchTerm, sortBy]);
-
-  const fetchTeachers = async () => {
+  const fetchTeachers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/admin/students");
+      const response = await fetch("/api/admin/teachers");
       const data = await response.json();
       if (data.success && data.teachers) {
         setTeachers(data.teachers);
@@ -48,9 +40,9 @@ export default function Users() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterAndSortTeachers = () => {
+  const filterAndSortTeachers = useCallback(() => {
     let filtered = teachers.filter(
       (teacher) =>
         teacher.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -74,7 +66,15 @@ export default function Users() {
 
     setFilteredTeachers(filtered);
     setCurrentPage(1);
-  };
+  }, [searchTerm, sortBy, teachers]);
+
+  useEffect(() => {
+    fetchTeachers();
+  }, [fetchTeachers]);
+
+  useEffect(() => {
+    filterAndSortTeachers();
+  }, [filterAndSortTeachers]);
 
   const handleResetPassword = async (email: string) => {
     try {
@@ -99,7 +99,7 @@ export default function Users() {
     if (!confirm("Deactivate this teacher? They won't be able to log in.")) return;
 
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action: "deactivate" }),
@@ -119,7 +119,7 @@ export default function Users() {
 
   const handleActivateTeacher = async (email: string) => {
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action: "activate" }),
@@ -139,7 +139,7 @@ export default function Users() {
 
   const handleLockTeacher = async (email: string) => {
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action: "lock" }),
@@ -159,7 +159,7 @@ export default function Users() {
 
   const handleUnlockTeacher = async (email: string) => {
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action: "unlock" }),
@@ -181,7 +181,7 @@ export default function Users() {
     if (!confirm("Permanently delete this teacher? This cannot be undone.")) return;
 
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -202,7 +202,7 @@ export default function Users() {
 
   const handleResendActivationEmail = async (email: string) => {
     try {
-      const response = await fetch("/api/admin/students", {
+      const response = await fetch("/api/admin/teachers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, action: "resend-activation" }),

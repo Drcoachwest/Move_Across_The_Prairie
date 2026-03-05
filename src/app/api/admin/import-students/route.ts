@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parse } from "csv-parse/sync";
 import { cookies } from "next/headers";
+import { SEX_OPTIONS, isSex } from "@/lib/fitnessgram/constants";
 
 /**
  * POST /api/admin/import-students
@@ -95,11 +96,11 @@ export async function POST(request: NextRequest) {
 
         // Validate sex
         const normalizedSex = String(sex).trim().toUpperCase();
-        if (normalizedSex !== "M" && normalizedSex !== "F") {
+        if (!isSex(normalizedSex)) {
           results.errors.push({
             row: rowNumber,
             districtId,
-            error: "Sex must be M or F",
+            error: `Sex must be ${SEX_OPTIONS.map((o) => o.value).join(" or ")}`,
           });
           results.skipped++;
           continue;
@@ -213,9 +214,9 @@ export async function GET() {
     }
 
     const csvTemplate = `districtId,firstName,lastName,sex,dateOfBirth,grade,school,peTeacher
-  STU001,John,Doe,M,2010-05-15,6,Central Elementary,Ms. Smith
-  STU002,Jane,Smith,F,2009-08-22,7,Central Elementary,Mr. Johnson
-  STU003,Bob,Johnson,M,2008-03-10,8,Lincoln Middle School,Ms. Garcia`;
+  STU001,John,Doe,${SEX_OPTIONS[0].value},2010-05-15,6,Central Elementary,Ms. Smith
+  STU002,Jane,Smith,${SEX_OPTIONS[1].value},2009-08-22,7,Central Elementary,Mr. Johnson
+  STU003,Bob,Johnson,${SEX_OPTIONS[0].value},2008-03-10,8,Lincoln Middle School,Ms. Garcia`;
 
     return new NextResponse(csvTemplate, {
       headers: {

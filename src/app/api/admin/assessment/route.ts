@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
+import {
+  CARDIO_TEST_OPTIONS,
+  CARDIO_TEST_TYPE,
+  SEASON_OPTIONS,
+  isCardioTestType,
+  isTestSeason,
+} from "@/lib/fitnessgram/constants";
+import { calculateBMI_US } from "@/lib/fitnessgram/bmi";
 
 /**
  * POST /api/admin/assessment
@@ -35,7 +43,6 @@ export async function POST(request: NextRequest) {
       shoulderStretchLeft,
       height,
       weight,
-      bmi,
       trunkLift,
       notes,
     } = body;
@@ -43,6 +50,20 @@ export async function POST(request: NextRequest) {
     if (!studentId || !testDate || !testSeason || !testYear) {
       return NextResponse.json(
         { error: "Missing required fields: studentId, testDate, testSeason, testYear" },
+        { status: 400 }
+      );
+    }
+
+    if (!isTestSeason(String(testSeason))) {
+      return NextResponse.json(
+        { error: `Test season must be ${SEASON_OPTIONS.map((o) => o.value).join(" or ")}` },
+        { status: 400 }
+      );
+    }
+
+    if (cardioTestType && !isCardioTestType(String(cardioTestType))) {
+      return NextResponse.json(
+        { error: `Cardio test type must be ${CARDIO_TEST_OPTIONS.map((o) => o.value).join(" or ")}` },
         { status: 400 }
       );
     }
@@ -65,10 +86,12 @@ export async function POST(request: NextRequest) {
         studentId_testYear_testSeason: {
           studentId,
           testYear,
-          testSeason: testSeason as "Fall" | "Spring",
+          testSeason,
         },
       },
     });
+
+    const computedBMI = calculateBMI_US(height ?? null, weight ?? null);
 
     let test;
     if (existingTest) {
@@ -77,7 +100,7 @@ export async function POST(request: NextRequest) {
         where: { id: existingTest.id },
         data: {
           testDate: new Date(testDate),
-          cardioTestType: cardioTestType || "PACER",
+          cardioTestType: (cardioTestType as string) || CARDIO_TEST_TYPE.PACER,
           pacerOrMileRun: pacerOrMileRun || null,
           pushups: pushups || null,
           situps: situps || null,
@@ -86,7 +109,7 @@ export async function POST(request: NextRequest) {
           shoulderStretchLeft: shoulderStretchLeft || null,
           height: height || null,
           weight: weight || null,
-          bmi: bmi || null,
+          bmi: computedBMI,
           trunkLift: trunkLift || null,
           notes: notes || null,
           updatedAt: new Date(),
@@ -99,9 +122,9 @@ export async function POST(request: NextRequest) {
           studentId,
           school: student.currentSchool,
           testDate: new Date(testDate),
-          testSeason: testSeason as "Fall" | "Spring",
+          testSeason,
           testYear,
-          cardioTestType: cardioTestType || "PACER",
+          cardioTestType: (cardioTestType as string) || CARDIO_TEST_TYPE.PACER,
           pacerOrMileRun: pacerOrMileRun || null,
           pushups: pushups || null,
           situps: situps || null,
@@ -110,7 +133,7 @@ export async function POST(request: NextRequest) {
           shoulderStretchLeft: shoulderStretchLeft || null,
           height: height || null,
           weight: weight || null,
-          bmi: bmi || null,
+          bmi: computedBMI,
           trunkLift: trunkLift || null,
           notes: notes || null,
         },
@@ -137,15 +160,15 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication (admin or teacher)
+    // Verify authentication (admin only)
     const cookieStore = await cookies();
     const adminSession = cookieStore.get("admin_session")?.value;
     const teacherSession = cookieStore.get("teacher_session")?.value;
     
-    if (!adminSession && !teacherSession) {
+    if (!adminSession) {
       return NextResponse.json(
-        { error: "Unauthorized - login required" },
-        { status: 401 }
+        { error: teacherSession ? "Forbidden" : "Unauthorized - login required" },
+        { status: teacherSession ? 403 : 401 }
       );
     }
 
@@ -157,7 +180,15 @@ export async function GET(request: NextRequest) {
     const where: any = {};
     if (studentId) where.studentId = studentId;
     if (testYear) where.testYear = parseInt(testYear);
-    if (testSeason) where.testSeason = testSeason;
+    if (testSeason) {
+      if (!isTestSeason(testSeason)) {
+        return NextResponse.json(
+          { error: `Test season must be ${SEASON_OPTIONS.map((o) => o.value).join(" or ")}` },
+          { status: 400 }
+        );
+      }
+      where.testSeason = testSeason;
+    }
 
     const tests = await prisma.fitnesGramTest.findMany({
       where,

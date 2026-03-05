@@ -35,7 +35,20 @@ export async function GET(
         dropDate: null, // Only active students
       },
       include: {
-        student: true,
+        student: {
+          select: {
+            id: true,
+            districtId: true,
+            firstName: true,
+            lastName: true,
+            sex: true,
+            dateOfBirth: true,
+            currentGrade: true,
+            currentSchool: true,
+            peTeacher: true,
+            classroomTeacher: true,
+          },
+        },
       },
     });
 
